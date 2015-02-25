@@ -1,0 +1,94 @@
+#!/usr/bin/env node
+var _ = require("lodash");
+var flat = require("flat");
+var nomnom = require("nomnom");
+var Docker = require("dockerode");
+var docker = new Docker({socketPath: "/var/run/docker.sock"});
+
+nomnom.command("start").options({
+    Env: {
+        required: false,
+        list: true
+    },
+    Memory: {
+        required: true,
+        transform: function(memory){
+            return memory * 1024 * 1024;
+        }
+    },
+    CpuShares: {
+        required: true
+    },
+    Cmd: {
+        required: true
+    },
+    Image: {
+        required: true
+    },
+    name: {
+        required: true
+    },
+    "container-port": {
+        required: true
+    },
+    "host-port": {
+        required: true
+    },
+    "HostConfig.NetworkMode": {
+        required: true
+    }
+}).callback(function(options){
+    var opts = flat.unflatten(options);
+
+    if(!_.isEmpty(opts.Cmd))
+        opts.Cmd = opts.Cmd.split(" ");
+
+    if(opts.HostConfig.NetworkMode == "bridge"){
+        opts.HostConfig.PortBindings = {};
+        opts.HostConfig.PortBindings[[opts["container-port"], "tcp"].join("/")] = [
+            {
+                HostPort: opts["host-port"].toString()
+            }
+        ]
+
+        opts.ExposedPorts = {};
+        opts.ExposedPorts[[opts["container-port"], "tcp"].join("/")] = {};
+    }
+
+    docker.createContainer(opts, function(err, container){
+        if(_.isNull(err)){
+            container.start({}, function(err, data){
+                var cleanup = get_cleanup(container);
+                process.on("SIGTERM", cleanup);
+                container.logs({follow: true, stdout: true, stderr: true}, function(err, stream){
+                    container.modem.demuxStream(stream, process.stdout, process.stderr);
+                    container.wait(cleanup);
+                });
+            });
+        }
+    });
+});
+
+nomnom.command("wait").options({
+    container: {
+        required: true
+    }
+}).callback(function(options){
+    var container = docker.getContainer(options.container);
+    var cleanup = get_cleanup(container);
+    process.on("SIGTERM", cleanup);
+    container.logs({follow: true, stdout: true, stderr: true}, function(err, stream){
+        container.modem.demuxStream(stream, process.stdout, process.stderr);
+        container.wait(cleanup);
+    });
+});
+
+var get_cleanup = function(container){
+    return function(){
+        container.kill(function(){
+            container.remove(function(){});
+        });
+    }
+}
+
+nomnom.parse();
