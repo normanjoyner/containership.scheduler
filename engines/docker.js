@@ -13,13 +13,16 @@ module.exports = {
 
         docker.version(function(err, info){
             if(_.isNull(err)){
-                var node = self.core.cluster.legiond.get_attributes();
-                node.engines.docker = {
-                    client_version: info.Version,
-                    api_version: info.ApiVersion,
-                    go_version: info.GoVersion
+                var engine_metadata = {
+                    engines: {
+                        docker: {
+                            client_version: info.Version,
+                            api_version: info.ApiVersion,
+                            go_version: info.GoVersion
+                        }
+                    }
                 }
-                self.core.cluster.legiond.set_attributes(node);
+                self.core.cluster.legiond.set_attributes(engine_metadata);
             }
         });
 
@@ -33,12 +36,22 @@ module.exports = {
     },
 
     // start container
-    start: function(options, node){
+    start: function(options){
         var self = this;
+        var node = this.core.cluster.legiond.get_attributes();
 
         options.cpus = (100 / node.cpus) * options.cpus;
         commands.pull(options.image, function(err){
             if(err){
+                var error = new Error("Docker pull failed");
+                error.details = err.message;
+
+                self.core.cluster.legiond.send("container.unloaded", {
+                    id: options.id,
+                    application_name: options.application_name,
+                    host: node.id,
+                    error: error
+                });
                 self.core.loggers["containership.scheduler"].log("warn", ["Failed to pull", options.image].join(" "));
                 self.core.loggers["containership.scheduler"].log("errror", err.message);
             }
@@ -80,8 +93,8 @@ module.exports = {
                     var host_port;
 
                     if(parts.length > 0){
-                        var application_name = _.initial(parts);
-                        var container_id = _.last(parts);
+                        var application_name = _.initial(parts).join("-");
+                        var container_id = _.last(parts)[0];
 
                         if(info.HostConfig.NetworkMode == "bridge"){
                             _.each(info.HostConfig.PortBindings, function(bindings, binding){
