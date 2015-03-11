@@ -1,6 +1,6 @@
 {
   "name": "containership.scheduler",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "The default scheduler for ContainerShip",
   "main": "application.js",
   "scripts": {
@@ -25,5 +25,9 @@
     "mkdirp": "^0.5.0"
   },
   "devDependencies": {},
-  "keywords": []
+  "keywords": [
+    "containership",
+    "containership.scheduler",
+    "scheduler"
+  ]
 }
