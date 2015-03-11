@@ -74,9 +74,6 @@ module.exports = {
     reconcile: function(leader){
         var self = this;
 
-        if(_.isUndefined(leader))
-            var leader = self.core.cluster.praetor.get_controlling_leader();
-
         var node = this.core.cluster.legiond.get_attributes();
         var applications = {};
 
@@ -94,7 +91,7 @@ module.exports = {
 
                     if(parts.length > 0){
                         var application_name = _.initial(parts).join("-");
-                        var container_id = _.last(parts)[0];
+                        var container_id = _.last(parts);
 
                         if(info.HostConfig.NetworkMode == "bridge"){
                             _.each(info.HostConfig.PortBindings, function(bindings, binding){
@@ -119,7 +116,8 @@ module.exports = {
                             host: node.id,
                             start_time: new Date(info.Created).valueOf(),
                             host_port: host_port,
-                            container_port: container_port
+                            container_port: container_port,
+                            engine: "docker"
                         });
 
                         if(!info.State.Running && !info.State.Restarting){
@@ -169,6 +167,9 @@ module.exports = {
                     }
                 });
             }, function(){
+                if(_.isUndefined(leader))
+                    var leader = self.core.cluster.praetor.get_controlling_leader();
+
                 if(!_.isUndefined(leader))
                     self.core.cluster.legiond.send("applications.reconciled", applications, leader);
             });
@@ -282,6 +283,22 @@ var commands = {
     // stop process
     stop: function(id){
         containers[id].stop();
+
+        if(_.contains(containers[id].args, "wait")){
+            docker.listContainers({all: true}, function(err, all_containers){
+                if(_.isNull(all_containers))
+                    all_containers = [];
+
+                _.each(all_containers, function(container){
+                    docker.getContainer(container.Id).inspect(function(err, info){
+                        var name = container.Names[0].slice(1);
+                        var parts = name.split("-");
+                        if(_.last(parts) == id)
+                            docker.getContainer(container.Id).kill(function(err, data){});
+                    });
+                });
+            });
+        }
     }
 
 }
