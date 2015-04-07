@@ -43,6 +43,15 @@ nomnom.command("start").options({
     if(!_.isEmpty(opts.Cmd))
         opts.Cmd = opts.Cmd.split(" ");
 
+    if(_.has(opts.HostConfig, "Binds")){
+        opts.HostConfig.Binds = opts.HostConfig.Binds.split(" ");
+        opts.Volumes = {};
+        _.each(opts.HostConfig.Binds, function(bind){
+            var container_bind = bind.split(":")[1];
+            opts.Volumes[container_bind] = {};
+        });
+    }
+
     if(opts.HostConfig.NetworkMode == "bridge"){
         opts.HostConfig.PortBindings = {};
         opts.HostConfig.PortBindings[[opts["container-port"], "tcp"].join("/")] = [
