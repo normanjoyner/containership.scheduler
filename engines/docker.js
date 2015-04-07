@@ -28,14 +28,14 @@ module.exports = {
 
         this.start_args = {};
         this.middleware = {
-            pre_start: []
+            pre_start: {}
         }
         self.reconcile();
     },
 
     // add pre start middleware
-    add_pre_start_middleware: function(fn){
-        this.middleware.pre_start.push(fn);
+    add_pre_start_middleware: function(name, fn){
+        this.middleware.pre_start[name] = fn;
     },
 
     // set standard start arguments
@@ -65,7 +65,13 @@ module.exports = {
             }
             options.start_args = self.start_args;
 
-            async.parallel(self.middleware.pre_start, function(err){
+            var pre_start_middleware = _.map(self.middleware.pre_start, function(middleware, middleware_name){
+                return function(fn){
+                    middleware(options, fn);
+                });
+            });
+
+            async.parallel(pre_start_middleware, function(err){
                 if(err){
                     self.core.cluster.legiond.send("container.unloaded", {
                         id: options.id,
