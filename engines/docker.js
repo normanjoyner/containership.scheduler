@@ -213,6 +213,16 @@ var commands = {
             "--HostConfig.NetworkMode", options.network_mode
         ]
 
+        if(!_.isEmpty(options, "volumes")){
+            args.push("--HostConfig.Binds");
+
+            var volumes = _.map(options.volumes, function(volume){
+                return [volume.host, volume.container].join(":");
+            });
+
+            args.push(volumes.join(" "));
+        }
+
         _.each(options.start_args, function(val, key){
             args.push(["--", key].join(""));
             if(_.isFunction(val))
