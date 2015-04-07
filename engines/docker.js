@@ -71,7 +71,7 @@ module.exports = {
                         id: options.id,
                         application_name: options.application_name,
                         host: node.id,
-                        error: error
+                        error: err
                     });
                 }
                 else
