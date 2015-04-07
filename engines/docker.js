@@ -27,7 +27,15 @@ module.exports = {
         });
 
         this.start_args = {};
+        this.middleware = {
+            pre_start: []
+        }
         self.reconcile();
+    },
+
+    // add pre start middleware
+    add_pre_start_middleware: function(fn){
+        this.middleware.pre_start.push(fn);
     },
 
     // set standard start arguments
@@ -56,7 +64,19 @@ module.exports = {
                 self.core.loggers["containership.scheduler"].log("errror", err.message);
             }
             options.start_args = self.start_args;
-            commands.start(self.core, options);
+
+            async.parallel(self.middleware.pre_start, function(err){
+                if(err){
+                    self.core.cluster.legiond.send("container.unloaded", {
+                        id: options.id,
+                        application_name: options.application_name,
+                        host: node.id,
+                        error: error
+                    });
+                }
+                else
+                    commands.start(self.core, options);
+            });
         });
     },
 
