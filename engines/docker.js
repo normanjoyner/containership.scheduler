@@ -239,7 +239,7 @@ var commands = {
             "--HostConfig.NetworkMode", options.network_mode
         ]
 
-        if(!_.isEmpty(options, "volumes")){
+        if(!_.isEmpty(options.volumes)){
             args.push("--HostConfig.Binds");
 
             var volumes = _.map(options.volumes, function(volume){
