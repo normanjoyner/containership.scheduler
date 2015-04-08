@@ -68,7 +68,7 @@ module.exports = {
             var pre_start_middleware = _.map(self.middleware.pre_start, function(middleware, middleware_name){
                 return function(fn){
                     middleware(options, fn);
-                });
+                }
             });
 
             async.parallel(pre_start_middleware, function(err){
