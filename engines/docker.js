@@ -259,7 +259,7 @@ var commands = {
 
         _.each(options.env_vars, function(val, key){
             args.push("--Env");
-            if(val.indexOf("$") == 0 && _.has(options.env_vars, val.substring(1, val.length))
+            if(val.indexOf("$") == 0 && _.has(options.env_vars, val.substring(1, val.length)))
                 val = options.env_vars[val.substring(1, val.length)];
 
             args.push([key, val].join("="));
