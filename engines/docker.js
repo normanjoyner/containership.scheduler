@@ -53,7 +53,7 @@ module.exports = {
         var self = this;
         var node = this.core.cluster.legiond.get_attributes();
 
-        options.cpus = 1024 * options.cpus;
+        options.cpus = Math.floor(1024 * options.cpus);
         commands.pull(options.image, function(err){
             if(err)
                 self.core.loggers["containership.scheduler"].log("error", ["Failed to pull", options.image].join(" "));
