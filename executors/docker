@@ -42,6 +42,8 @@ nomnom.command("start").options({
 
     if(!_.isEmpty(opts.Cmd))
         opts.Cmd = opts.Cmd.split(" ");
+    else
+        delete opts.Cmd;
 
     if(_.has(opts.HostConfig, "Binds")){
         opts.HostConfig.Binds = opts.HostConfig.Binds.split(" ");
