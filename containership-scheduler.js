@@ -1,6 +1,4 @@
 var _ = require("lodash");
-var leader = require([__dirname, "lib", "leader"].join("/"));
-var follower = require([__dirname, "lib", "follower"].join("/"));
 
 // define ContainershipScheduler
 function ContainershipScheduler(core){}
@@ -23,9 +21,9 @@ ContainershipScheduler.prototype.load_core = function(core){
     this.core.logger.register("containership.scheduler");
 
     if(core.options.mode == "leader")
-        this.leader = leader(core);
+        this.leader = require([__dirname, "lib", "leader"].join("/"))(core);
     else
-        this.follower = follower(core);
+        this.follower = require([__dirname, "lib", "follower"].join("/"))(core);
 }
 
 ContainershipScheduler.prototype.harmonize = function(){
