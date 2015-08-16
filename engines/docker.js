@@ -186,7 +186,7 @@ module.exports = {
                             var base_log_dir = [self.core.scheduler.options["container-log-dir"], application_name, container_id].join("/");
 
                             containers[container_id] = new(forever.Monitor)([__dirname, "..", "executors", "docker"].join("/"), {
-                                silent: self.core.options["log-level"] != "silly",
+                                silent: false,
                                 max: 1,
                                 minUptime: 5000,
                                 args: args,
@@ -313,7 +313,7 @@ var commands = {
 
         mkdirp(base_log_dir, function(){
             containers[options.id] = new(forever.Monitor)([__dirname, "..", "executors", options.engine].join("/"), {
-                silent: core.options["log-level"] != "silly",
+                silent: false,
                 max: 1,
                 minUptime: 5000,
                 args: args,

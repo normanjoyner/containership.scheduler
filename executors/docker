@@ -77,6 +77,8 @@ nomnom.command("start").options({
                 });
             });
         }
+        else
+            console.log(err);
     });
 });
 
