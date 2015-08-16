@@ -261,7 +261,8 @@ var commands = {
             "--Image", options.image,
             "--name", [options.application_name, options.id].join("-"),
             "--host-port", options.host_port,
-            "--HostConfig.NetworkMode", options.network_mode
+            "--HostConfig.NetworkMode", options.network_mode,
+            "--HostConfig.Privileged", options.privileged
         ]
 
         if(!_.isEmpty(options.volumes)){
