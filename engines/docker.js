@@ -28,6 +28,7 @@ module.exports = {
 
         this.start_args = {};
         this.middleware = {
+            pre_pull: {},
             pre_start: {}
         }
         self.reconcile();
@@ -36,6 +37,11 @@ module.exports = {
     // add pre start middleware
     add_pre_start_middleware: function(name, fn){
         this.middleware.pre_start[name] = fn;
+    },
+
+    // add pre pull middleware
+    add_pre_pull_middleware: function(name, fn){
+        this.middleware.pre_pull[name] = fn;
     },
 
     // set standard start arguments
@@ -48,41 +54,60 @@ module.exports = {
         var self = this;
         var node = this.core.cluster.legiond.get_attributes();
 
-        options.cpus = Math.floor(1024 * options.cpus);
-        commands.pull(options.image, function(err){
-            if(err){
-                var error = new Error("Docker pull failed");
-                error.details = err.message;
+        var pre_pull_middleware = _.map(self.middleware.pre_pull, function(middleware, middleware_name){
+            return function(fn){
+                middleware(options, fn);
+            }
+        });
 
+        options.cpus = Math.floor(1024 * options.cpus);
+
+        async.parallel(pre_pull_middleware, function(err){
+            if(err){
                 self.core.cluster.legiond.send("container.unloaded", {
                     id: options.id,
                     application_name: options.application_name,
                     host: node.id,
-                    error: error
+                    error: err
                 });
-                self.core.loggers["containership.scheduler"].log("warn", ["Failed to pull", options.image].join(" "));
-                self.core.loggers["containership.scheduler"].log("errror", err.message);
             }
-            options.start_args = self.start_args;
+            else{
+                commands.pull(options.image, options.auth || {}, function(err){
+                    if(err){
+                        var error = new Error("Docker pull failed");
+                        error.details = err.message;
 
-            var pre_start_middleware = _.map(self.middleware.pre_start, function(middleware, middleware_name){
-                return function(fn){
-                    middleware(options, fn);
-                }
-            });
+                        self.core.cluster.legiond.send("container.unloaded", {
+                            id: options.id,
+                            application_name: options.application_name,
+                            host: node.id,
+                            error: error
+                        });
+                        self.core.loggers["containership.scheduler"].log("warn", ["Failed to pull", options.image].join(" "));
+                        self.core.loggers["containership.scheduler"].log("errror", err.message);
+                    }
+                    options.start_args = self.start_args;
 
-            async.parallel(pre_start_middleware, function(err){
-                if(err){
-                    self.core.cluster.legiond.send("container.unloaded", {
-                        id: options.id,
-                        application_name: options.application_name,
-                        host: node.id,
-                        error: err
+                    var pre_start_middleware = _.map(self.middleware.pre_start, function(middleware, middleware_name){
+                        return function(fn){
+                            middleware(options, fn);
+                        }
                     });
-                }
-                else
-                    commands.start(self.core, options);
-            });
+
+                    async.parallel(pre_start_middleware, function(err){
+                        if(err){
+                            self.core.cluster.legiond.send("container.unloaded", {
+                                id: options.id,
+                                application_name: options.application_name,
+                                host: node.id,
+                                error: err
+                            });
+                        }
+                        else
+                            commands.start(self.core, options);
+                    });
+                });
+            }
         });
     },
 
