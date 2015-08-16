@@ -36,6 +36,9 @@ nomnom.command("start").options({
     },
     "HostConfig.NetworkMode": {
         required: true
+    },
+    "HostConfig.Privileged": {
+        required: true
     }
 }).callback(function(options){
     var opts = flat.unflatten(options);
@@ -77,6 +80,8 @@ nomnom.command("start").options({
                 });
             });
         }
+        else
+            console.log(err);
     });
 });
 
