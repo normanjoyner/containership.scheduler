@@ -233,21 +233,17 @@ var containers = {};
 var commands = {
 
     // pull docker image
-    pull: function(image, fn){
-        docker.pull(image, function(err, stream){
+    pull: function(image, auth, fn){
+        docker.pull(image, auth, function(err, stream){
             if(err)
                 return fn(err);
-            else{
-                stream.on("data", function(){});
 
-                stream.on("error", function(err){
-                    return fn(err);
-                });
+            docker.modem.followProgress(stream, onFinished, onProgress);
 
-                stream.on("end", function(){
-                    return fn();
-                });
+            function onFinished(err, output){
+                return fn(err);
             }
+            function onProgress(){}
         });
     },
 
