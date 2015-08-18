@@ -72,7 +72,7 @@ module.exports = {
                 });
             }
             else{
-                commands.pull(options.image, options.auth || {}, function(err){
+                commands.pull(options.image, options.auth || [{}], function(err){
                     if(err){
                         var error = new Error("Docker pull failed");
                         error.details = err.message;
@@ -234,16 +234,20 @@ var commands = {
 
     // pull docker image
     pull: function(image, auth, fn){
-        docker.pull(image, auth, function(err, stream){
-            if(err)
-                return fn(err);
+        async.eachSeries(auth, function(authentication, fn){
+            docker.pull(image, authentication, function(err, stream){
+                if(err)
+                    return fn(err);
 
-            docker.modem.followProgress(stream, onFinished, onProgress);
+                docker.modem.followProgress(stream, onFinished, onProgress);
 
-            function onFinished(err, output){
-                return fn(err);
-            }
-            function onProgress(){}
+                function onFinished(err, output){
+                    return fn(err);
+                }
+                function onProgress(){}
+            });
+        }, function(){
+            return fn();
         });
     },
 
