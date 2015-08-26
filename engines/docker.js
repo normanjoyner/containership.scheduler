@@ -32,6 +32,7 @@ module.exports = {
         this.start_args = {};
 
         this.middleware = {
+            pre_pull: {},
             pre_start: {}
         }
 
@@ -41,6 +42,11 @@ module.exports = {
     // add pre start middleware
     add_pre_start_middleware: function(name, fn){
         this.middleware.pre_start[name] = fn;
+    },
+
+    // add pre pull middleware
+    add_pre_pull_middleware: function(name, fn){
+        this.middleware.pre_pull[name] = fn;
     },
 
     // set standard start arguments
@@ -53,25 +59,60 @@ module.exports = {
         var self = this;
         var node = this.core.cluster.legiond.get_attributes();
 
+        var pre_pull_middleware = _.map(self.middleware.pre_pull, function(middleware, middleware_name){
+            return function(fn){
+                middleware(options, fn);
+            }
+        });
+
         options.cpus = Math.floor(1024 * options.cpus);
-        commands.pull(options.image, function(err){
-            if(err)
-                self.core.loggers["containership.scheduler"].log("error", ["Failed to pull", options.image].join(" "));
 
-            options.start_args = self.start_args;
+        async.parallel(pre_pull_middleware, function(err){
+            if(err){
+                self.core.cluster.legiond.send("container.unloaded", {
+                    id: options.id,
+                    application_name: options.application_name,
+                    host: node.id,
+                    error: err
+                });
+            }
+            else{
+                commands.pull(options.image, options.auth || [{}], function(err){
+                    if(err){
+                        var error = new Error("Docker pull failed");
+                        error.details = err.message;
 
-            var pre_start_middleware = _.map(self.middleware.pre_start, function(middleware, middleware_name){
-                return function(fn){
-                    middleware(options, fn);
-                }
-            });
+                        self.core.cluster.legiond.send("container.unloaded", {
+                            id: options.id,
+                            application_name: options.application_name,
+                            host: node.id,
+                            error: error
+                        });
+                        self.core.loggers["containership.scheduler"].log("warn", ["Failed to pull", options.image].join(" "));
+                        self.core.loggers["containership.scheduler"].log("errror", err.message);
+                    }
+                    options.start_args = self.start_args;
 
-            async.parallel(pre_start_middleware, function(err){
-                if(err)
-                    self.core.loggers["containership.scheduler"].log("error", ["Failed pre-start middleware!", err.message].join(" "));
-                else
-                    commands.start(self.core, options);
-            });
+                    var pre_start_middleware = _.map(self.middleware.pre_start, function(middleware, middleware_name){
+                        return function(fn){
+                            middleware(options, fn);
+                        }
+                    });
+
+                    async.parallel(pre_start_middleware, function(err){
+                        if(err){
+                            self.core.cluster.legiond.send("container.unloaded", {
+                                id: options.id,
+                                application_name: options.application_name,
+                                host: node.id,
+                                error: err
+                            });
+                        }
+                        else
+                            commands.start(self.core, options);
+                    });
+                });
+            }
         });
     },
 
@@ -225,21 +266,21 @@ var containers = {};
 var commands = {
 
     // pull docker image
-    pull: function(image, fn){
-        docker.pull(image, function(err, stream){
-            if(err)
-                return fn(err);
-            else{
-                stream.on("data", function(){});
-
-                stream.on("error", function(err){
+    pull: function(image, auth, fn){
+        async.eachSeries(auth, function(authentication, fn){
+            docker.pull(image, authentication, function(err, stream){
+                if(err)
                     return fn(err);
-                });
 
-                stream.on("end", function(){
-                    return fn();
-                });
-            }
+                docker.modem.followProgress(stream, onFinished, onProgress);
+
+                function onFinished(err, output){
+                    return fn(err);
+                }
+                function onProgress(){}
+            });
+        }, function(){
+            return fn();
         });
     },
 
@@ -255,7 +296,8 @@ var commands = {
             "--Image", options.image,
             "--name", [options.application_name, options.id].join("-"),
             "--host-port", options.host_port,
-            "--HostConfig.NetworkMode", options.network_mode
+            "--HostConfig.NetworkMode", options.network_mode,
+            "--HostConfig.Privileged", options.privileged
         ]
 
         if(!_.isEmpty(options.volumes)){
