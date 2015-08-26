@@ -86,11 +86,10 @@ module.exports = {
     },
 
     // reconcile containers
-    reconcile: function(leader){
+    reconcile: function(){
         var self = this;
 
         var node = this.core.cluster.legiond.get_attributes();
-        var applications = {};
 
         docker.listContainers({all: true}, function(err, all_containers){
             if(_.isNull(all_containers))
@@ -123,18 +122,6 @@ module.exports = {
                             });
                         }
 
-                        if(!_.has(applications, application_name))
-                            applications[application_name] = [];
-
-                        applications[application_name].push({
-                            id: container_id,
-                            host: node.id,
-                            start_time: new Date(info.Created).valueOf(),
-                            host_port: host_port,
-                            container_port: container_port,
-                            engine: "docker"
-                        });
-
                         if(!info.State.Running && !info.State.Restarting){
                             docker.getContainer(container.Id).remove(function(err){
                                 if(_.isNull(err))
@@ -162,19 +149,26 @@ module.exports = {
 
                             containers[container_id].on("start", function(){
                                 self.core.loggers["containership.scheduler"].log("info", ["Reconciled running", application_name, "container:", container_id].join(" "));
-                                commands.update_container({
-                                    core: self.core,
-                                    application_name: application_name,
-                                    container_id: container_id,
-                                    status: "loaded"
-                                }, function(err){
-                                    if(err){
-                                        docker.getContainer(container.Id).remove(function(err){
-                                            if(_.isNull(err))
-                                                self.core.loggers["containership.scheduler"].log("verbose", ["Cleaned up dead", application_name, "container:", container_id].join(" "));
-                                        });
-                                    }
-                                });
+                                setTimeout(function(){
+                                    commands.update_container({
+                                        core: self.core,
+                                        application_name: application_name,
+                                        container_id: container_id,
+                                        status: "loaded",
+                                        host: node.id,
+                                        start_time: new Date(info.Created).valueOf(),
+                                        host_port: host_port,
+                                        container_port: container_port,
+                                        engine: "docker"
+                                    }, function(err){
+                                        if(err){
+                                            docker.getContainer(container.Id).remove(function(err){
+                                                if(_.isNull(err))
+                                                    self.core.loggers["containership.scheduler"].log("verbose", ["Cleaned up dead", application_name, "container:", container_id].join(" "));
+                                            });
+                                        }
+                                    });
+                                }, 2000);
                             });
 
                             containers[container_id].on("exit", function(){
@@ -199,10 +193,15 @@ module.exports = {
                         else{
                             self.core.loggers["containership.scheduler"].log("info", ["Reconciled running", application_name, "container:", container_id].join(" "));
                             commands.update_container({
-			                    core: self.core,
+                                core: self.core,
                                 application_name: application_name,
                                 container_id: container_id,
-                                status: "loaded"
+                                status: "loaded",
+                                host: node.id,
+                                start_time: new Date(info.Created).valueOf(),
+                                host_port: host_port,
+                                container_port: container_port,
+                                engine: "docker"
                             }, function(err){
                                 if(err){
                                     docker.getContainer(container.Id).remove(function(err){
@@ -423,6 +422,15 @@ var commands = {
 
                 if(_.has(options, "start_time"))
                     container.start_time = options.start_time;
+
+                if(_.has(options, "engine"))
+                    container.engine = options.engine;
+
+                if(_.has(options, "host_port"))
+                    container.host_port = options.host_port;
+
+                if(_.has(options, "container_port"))
+                    container.container_port = options.container_port;
 
                 if(options.status == "unloaded" && container.random_host_port)
                     container.host_port = null;
