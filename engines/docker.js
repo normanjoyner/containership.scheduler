@@ -57,7 +57,7 @@ module.exports = {
     // start container
     start: function(options){
         var self = this;
-        try{
+
         var node = this.core.cluster.legiond.get_attributes();
 
         var pre_pull_middleware = _.map(self.middleware.pre_pull, function(middleware, middleware_name){
@@ -115,7 +115,6 @@ module.exports = {
                 });
             }
         });
-}catch(e){console.log(e.stack)}
     },
 
     // stop container
