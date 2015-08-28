@@ -13,24 +13,29 @@ module.exports = {
 
         docker.version(function(err, info){
             if(_.isNull(err)){
-                var engine_metadata = {
-                    engines: {
-                        docker: {
-                            client_version: info.Version,
-                            api_version: info.ApiVersion,
-                            go_version: info.GoVersion
-                        }
-                    }
+                var attributes = self.core.cluster.legiond.get_attributes();
+                var tags = attributes.tags;
+
+                if(!_.has(tags.metadata, "engines"))
+                    tags.engines = {};
+
+                tags.metadata.engines.docker = {
+                    client_version: info.Version,
+                    api_version: info.ApiVersion,
+                    go_version: info.GoVersion
                 }
-                self.core.cluster.legiond.set_attributes(engine_metadata);
+
+                self.core.cluster.legiond.set_attributes(tags);
             }
         });
 
         this.start_args = {};
+
         this.middleware = {
             pre_pull: {},
             pre_start: {}
         }
+
         self.reconcile();
     },
 
@@ -52,6 +57,7 @@ module.exports = {
     // start container
     start: function(options){
         var self = this;
+
         var node = this.core.cluster.legiond.get_attributes();
 
         var pre_pull_middleware = _.map(self.middleware.pre_pull, function(middleware, middleware_name){
@@ -112,8 +118,8 @@ module.exports = {
     },
 
     // stop container
-    stop: function(id){
-        commands.stop(id);
+    stop: function(options){
+        commands.stop(this.core, options);
     },
 
     // get containeres
@@ -122,11 +128,10 @@ module.exports = {
     },
 
     // reconcile containers
-    reconcile: function(leader){
+    reconcile: function(){
         var self = this;
 
         var node = this.core.cluster.legiond.get_attributes();
-        var applications = {};
 
         docker.listContainers({all: true}, function(err, all_containers){
             if(_.isNull(all_containers))
@@ -159,18 +164,6 @@ module.exports = {
                             });
                         }
 
-                        if(!_.has(applications, application_name))
-                            applications[application_name] = [];
-
-                        applications[application_name].push({
-                            id: container_id,
-                            host: node.id,
-                            start_time: new Date(info.Created).valueOf(),
-                            host_port: host_port,
-                            container_port: container_port,
-                            engine: "docker"
-                        });
-
                         if(!info.State.Running && !info.State.Restarting){
                             docker.getContainer(container.Id).remove(function(err){
                                 if(_.isNull(err))
@@ -198,32 +191,75 @@ module.exports = {
 
                             containers[container_id].on("start", function(){
                                 self.core.loggers["containership.scheduler"].log("info", ["Reconciled running", application_name, "container:", container_id].join(" "));
+                                setTimeout(function(){
+                                    commands.update_container({
+                                        core: self.core,
+                                        application_name: application_name,
+                                        container_id: container_id,
+                                        status: "loaded",
+                                        host: node.id,
+                                        start_time: new Date(info.Created).valueOf(),
+                                        host_port: host_port,
+                                        container_port: container_port,
+                                        engine: "docker"
+                                    }, function(err){
+                                        if(err){
+                                            docker.getContainer(container.Id).remove(function(err){
+                                                if(_.isNull(err))
+                                                    self.core.loggers["containership.scheduler"].log("verbose", ["Cleaned up dead", application_name, "container:", container_id].join(" "));
+                                            });
+                                        }
+                                    });
+                                }, 2000);
                             });
 
                             containers[container_id].on("exit", function(){
                                 self.core.loggers["containership.scheduler"].log("info", ["Unloading", application_name, "container:", container_id].join(" "));
-                                self.core.cluster.legiond.send("container.unloaded", {
-                                    id: container_id,
-                                    application_name: application_name,
-                                    host: self.core.cluster.legiond.get_attributes().id
-                                });
+                                setTimeout(function(){
+                                    commands.update_container({
+                                        application_name: application_name,
+                                        container_id: container_id,
+                                        status: "unloaded",
+                                        host: null,
+                                        start_time: null,
+                                        core: self.core
+                                    }, function(err){
+                                        if(err){
+                                            core.loggers["containership.scheduler"].log("warn", ["Failed to stop", options.application, "container:", options.id].join(" "));
+                                            core.loggers["containership.scheduler"].log("warn", err.message);
+                                        }
+                                    });
+                                }, 2000);
                             });
 
                             containers[container_id].start();
                         }
-                        else
+                        else{
                             self.core.loggers["containership.scheduler"].log("info", ["Reconciled running", application_name, "container:", container_id].join(" "));
+                            commands.update_container({
+                                core: self.core,
+                                application_name: application_name,
+                                container_id: container_id,
+                                status: "loaded",
+                                host: node.id,
+                                start_time: new Date(info.Created).valueOf(),
+                                host_port: host_port,
+                                container_port: container_port,
+                                engine: "docker"
+                            }, function(err){
+                                if(err){
+                                    docker.getContainer(container.Id).remove(function(err){
+                                        if(_.isNull(err))
+                                            self.core.loggers["containership.scheduler"].log("verbose", ["Cleaned up dead", application_name, "container:", container_id].join(" "));
+                                    });
+                                }
+                            });
+                        }
 
                         return fn();
                     }
                 });
-            }, function(){
-                if(_.isUndefined(leader))
-                    var leader = self.core.cluster.praetor.get_controlling_leader();
-
-                if(!_.isUndefined(leader))
-                    self.core.cluster.legiond.send("applications.reconciled", applications, leader);
-            });
+            }, function(){});
         });
     }
 }
@@ -253,6 +289,8 @@ var commands = {
 
     // start process with forever
     start: function(core, options){
+        var self = this;
+
         var args = [
             "start",
             "--Cmd", options.command,
@@ -326,21 +364,39 @@ var commands = {
 
             containers[options.id].on("start", function(){
                 core.loggers["containership.scheduler"].log("info", ["Loading", options.application_name, "container:", options.id].join(" "));
-                core.cluster.legiond.send("container.loaded", {
-                    id: options.id,
+
+                self.update_container({
                     application_name: options.application_name,
-                    host: core.cluster.legiond.get_attributes().id
+                    container_id: options.id,
+                    status: "loaded",
+		    core: core
+                }, function(err){
+                    if(err){
+                        core.loggers["containership.scheduler"].log("warn", ["Failed to load", options.application_name, "container:", options.id].join(" "));
+                        core.loggers["containership.scheduler"].log("warn", err.message);
+                    }
                 });
             });
 
             containers[options.id].on("exit", function(){
                 core.loggers["containership.scheduler"].log("info", ["Unloading", options.application_name, "container:", options.id].join(" "));
                 core.loggers["containership.scheduler"].log("verbose", [options.id, "exited after", ((new Date() - options.start_time) / 1000), "seconds"].join(" "));
-                core.cluster.legiond.send("container.unloaded", {
-                    id: options.id,
-                    application_name: options.application_name,
-                    host: core.cluster.legiond.get_attributes().id
-                });
+
+                setTimeout(function(){
+                    self.update_container({
+                        application_name: options.application_name,
+                        container_id: options.id,
+                        status: "unloaded",
+                        host: null,
+                        start_time: null,
+                        core: core
+                    }, function(err){
+                        if(err){
+                            core.loggers["containership.scheduler"].log("warn", ["Failed to stop", options.application_name, "container:", options.id].join(" "));
+                            core.loggers["containership.scheduler"].log("warn", err.message);
+                        }
+                    });
+                }, 2000);
             });
 
             containers[options.id].start();
@@ -348,25 +404,74 @@ var commands = {
     },
 
     // stop process
-    stop: function(id){
-        containers[id].stop();
+    stop: function(core, options){
+        this.delete_container({
+            application_name: options.application,
+            container_id: options.container_id,
+            core: core
+        }, function(err){
+            if(err){
+                core.loggers["containership.scheduler"].log("warn", ["Failed to delete", options.application, "container:", options.container_id].join(" "));
+                core.loggers["containership.scheduler"].log("warn", err.message);
+            }
 
-        if(_.contains(containers[id].args, "wait")){
-            docker.listContainers({all: true}, function(err, all_containers){
-                if(_.isNull(all_containers))
-                    all_containers = [];
+            containers[options.container_id].stop();
 
-                _.each(all_containers, function(container){
-                    docker.getContainer(container.Id).inspect(function(err, info){
-                        var name = container.Names[0].slice(1);
-                        var parts = name.split("-");
-                        if(_.last(parts) == id)
-                            docker.getContainer(container.Id).kill(function(err, data){});
+            if(_.contains(containers[options.container_id].args, "wait")){
+                docker.listContainers({all: true}, function(err, all_containers){
+                    if(_.isNull(all_containers))
+                        all_containers = [];
+
+                    _.each(all_containers, function(container){
+                        docker.getContainer(container.Id).inspect(function(err, info){
+                            var name = container.Names[0].slice(1);
+                            if(name == [options.application, options.container_id].join("-"))
+                                docker.getContainer(container.Id).kill(function(err, data){});
+                        });
                     });
                 });
-            });
-        }
+            }
+        });
+    },
+
+    // update container status
+    update_container: function(options, fn){
+        options.core.cluster.myriad.persistence.get([options.core.constants.myriad.CONTAINERS_PREFIX, options.application_name, options.container_id].join("::"), function(err, container){
+            if(err)
+                return fn(err);
+
+            try{
+                container = JSON.parse(container);
+                container.status = options.status;
+
+                if(_.has(options, "host"))
+                    container.host = options.host;
+
+                if(_.has(options, "start_time"))
+                    container.start_time = options.start_time;
+
+                if(_.has(options, "engine"))
+                    container.engine = options.engine;
+
+                if(_.has(options, "host_port"))
+                    container.host_port = options.host_port;
+
+                if(_.has(options, "container_port"))
+                    container.container_port = options.container_port;
+
+                if(options.status == "unloaded" && container.random_host_port)
+                    container.host_port = null;
+
+                options.core.cluster.myriad.persistence.set([options.core.constants.myriad.CONTAINERS_PREFIX, options.application_name, options.container_id].join("::"), JSON.stringify(container), fn);
+            }
+            catch(err){
+                return fn(err);
+            }
+        });
+    },
+
+    // delete container
+    delete_container: function(options, fn){
+        options.core.cluster.myriad.persistence.delete([options.core.constants.myriad.CONTAINERS_PREFIX, options.application_name, options.container_id].join("::"), fn);
     }
-
 }
-
