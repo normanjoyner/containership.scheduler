@@ -32,6 +32,7 @@ module.exports = {
         this.start_args = {};
 
         this.middleware = {
+            pre_pull: {},
             pre_start: {}
         }
 
@@ -43,6 +44,11 @@ module.exports = {
         this.middleware.pre_start[name] = fn;
     },
 
+    // add pre pull middleware
+    add_pre_pull_middleware: function(name, fn){
+        this.middleware.pre_pull[name] = fn;
+    },
+
     // set standard start arguments
     set_start_arguments: function(key, value){
         this.start_args[key] = value;
@@ -51,33 +57,69 @@ module.exports = {
     // start container
     start: function(options){
         var self = this;
+
         var node = this.core.cluster.legiond.get_attributes();
 
-        options.cpus = (100 / node.cpus) * options.cpus;
-        commands.pull(options.image, function(err){
-            if(err)
-                self.core.loggers["containership.scheduler"].log("error", ["Failed to pull", options.image].join(" "));
+        var pre_pull_middleware = _.map(self.middleware.pre_pull, function(middleware, middleware_name){
+            return function(fn){
+                middleware(options, fn);
+            }
+        });
 
-            options.start_args = self.start_args;
+        options.cpus = Math.floor(1024 * options.cpus);
 
-            var pre_start_middleware = _.map(self.middleware.pre_start, function(middleware, middleware_name){
-                return function(fn){
-                    middleware(options, fn);
-                }
-            });
+        async.parallel(pre_pull_middleware, function(err){
+            if(err){
+                self.core.cluster.legiond.send("container.unloaded", {
+                    id: options.id,
+                    application_name: options.application_name,
+                    host: node.id,
+                    error: err
+                });
+            }
+            else{
+                commands.pull(options.image, options.auth || [{}], function(err){
+                    if(err){
+                        var error = new Error("Docker pull failed");
+                        error.details = err.message;
 
-            async.parallel(pre_start_middleware, function(err){
-                if(err)
-                    self.core.loggers["containership.scheduler"].log("error", ["Failed pre-start middleware!", err.message].join(" "));
-                else
-                    commands.start(self.core, options);
-            });
+                        self.core.cluster.legiond.send("container.unloaded", {
+                            id: options.id,
+                            application_name: options.application_name,
+                            host: node.id,
+                            error: error
+                        });
+                        self.core.loggers["containership.scheduler"].log("warn", ["Failed to pull", options.image].join(" "));
+                        self.core.loggers["containership.scheduler"].log("errror", err.message);
+                    }
+                    options.start_args = self.start_args;
+
+                    var pre_start_middleware = _.map(self.middleware.pre_start, function(middleware, middleware_name){
+                        return function(fn){
+                            middleware(options, fn);
+                        }
+                    });
+
+                    async.parallel(pre_start_middleware, function(err){
+                        if(err){
+                            self.core.cluster.legiond.send("container.unloaded", {
+                                id: options.id,
+                                application_name: options.application_name,
+                                host: node.id,
+                                error: err
+                            });
+                        }
+                        else
+                            commands.start(self.core, options);
+                    });
+                });
+            }
         });
     },
 
     // stop container
     stop: function(options){
-        commands.stop(options);
+        commands.stop(this.core, options);
     },
 
     // get containeres
@@ -86,11 +128,10 @@ module.exports = {
     },
 
     // reconcile containers
-    reconcile: function(leader){
+    reconcile: function(){
         var self = this;
 
         var node = this.core.cluster.legiond.get_attributes();
-        var applications = {};
 
         docker.listContainers({all: true}, function(err, all_containers){
             if(_.isNull(all_containers))
@@ -123,18 +164,6 @@ module.exports = {
                             });
                         }
 
-                        if(!_.has(applications, application_name))
-                            applications[application_name] = [];
-
-                        applications[application_name].push({
-                            id: container_id,
-                            host: node.id,
-                            start_time: new Date(info.Created).valueOf(),
-                            host_port: host_port,
-                            container_port: container_port,
-                            engine: "docker"
-                        });
-
                         if(!info.State.Running && !info.State.Restarting){
                             docker.getContainer(container.Id).remove(function(err){
                                 if(_.isNull(err))
@@ -150,7 +179,7 @@ module.exports = {
                             var base_log_dir = [self.core.scheduler.options["container-log-dir"], application_name, container_id].join("/");
 
                             containers[container_id] = new(forever.Monitor)([__dirname, "..", "executors", "docker"].join("/"), {
-                                silent: self.core.options["log-level"] != "silly",
+                                silent: false,
                                 max: 1,
                                 minUptime: 5000,
                                 args: args,
@@ -162,26 +191,70 @@ module.exports = {
 
                             containers[container_id].on("start", function(){
                                 self.core.loggers["containership.scheduler"].log("info", ["Reconciled running", application_name, "container:", container_id].join(" "));
-                                self.update_container({
-                                    application_name: application_name,
-                                    container_id: container_id,
-                                    status: "loaded"
-                                }, function(err){
-                                    if(err){
-                                        core.loggers["containership.scheduler"].log("warn", ["Failed to load", application_name, "container:", container_id].join(" "));
-                                        core.loggers["containership.scheduler"].log("warn", e.message);
-                                    }
-                                });
+                                setTimeout(function(){
+                                    commands.update_container({
+                                        core: self.core,
+                                        application_name: application_name,
+                                        container_id: container_id,
+                                        status: "loaded",
+                                        host: node.id,
+                                        start_time: new Date(info.Created).valueOf(),
+                                        host_port: host_port,
+                                        container_port: container_port,
+                                        engine: "docker"
+                                    }, function(err){
+                                        if(err){
+                                            docker.getContainer(container.Id).remove(function(err){
+                                                if(_.isNull(err))
+                                                    self.core.loggers["containership.scheduler"].log("verbose", ["Cleaned up dead", application_name, "container:", container_id].join(" "));
+                                            });
+                                        }
+                                    });
+                                }, 2000);
                             });
 
                             containers[container_id].on("exit", function(){
                                 self.core.loggers["containership.scheduler"].log("info", ["Unloading", application_name, "container:", container_id].join(" "));
+                                setTimeout(function(){
+                                    commands.update_container({
+                                        application_name: application_name,
+                                        container_id: container_id,
+                                        status: "unloaded",
+                                        host: null,
+                                        start_time: null,
+                                        core: self.core
+                                    }, function(err){
+                                        if(err){
+                                            core.loggers["containership.scheduler"].log("warn", ["Failed to stop", options.application, "container:", options.id].join(" "));
+                                            core.loggers["containership.scheduler"].log("warn", err.message);
+                                        }
+                                    });
+                                }, 2000);
                             });
 
                             containers[container_id].start();
                         }
-                        else
+                        else{
                             self.core.loggers["containership.scheduler"].log("info", ["Reconciled running", application_name, "container:", container_id].join(" "));
+                            commands.update_container({
+                                core: self.core,
+                                application_name: application_name,
+                                container_id: container_id,
+                                status: "loaded",
+                                host: node.id,
+                                start_time: new Date(info.Created).valueOf(),
+                                host_port: host_port,
+                                container_port: container_port,
+                                engine: "docker"
+                            }, function(err){
+                                if(err){
+                                    docker.getContainer(container.Id).remove(function(err){
+                                        if(_.isNull(err))
+                                            self.core.loggers["containership.scheduler"].log("verbose", ["Cleaned up dead", application_name, "container:", container_id].join(" "));
+                                    });
+                                }
+                            });
+                        }
 
                         return fn();
                     }
@@ -196,26 +269,28 @@ var containers = {};
 var commands = {
 
     // pull docker image
-    pull: function(image, fn){
-        docker.pull(image, function(err, stream){
-            if(err)
-                return fn(err);
-            else{
-                stream.on("data", function(){});
-
-                stream.on("error", function(err){
+    pull: function(image, auth, fn){
+        async.eachSeries(auth, function(authentication, fn){
+            docker.pull(image, authentication, function(err, stream){
+                if(err)
                     return fn(err);
-                });
 
-                stream.on("end", function(){
-                    return fn();
-                });
-            }
+                docker.modem.followProgress(stream, onFinished, onProgress);
+
+                function onFinished(err, output){
+                    return fn(err);
+                }
+                function onProgress(){}
+            });
+        }, function(){
+            return fn();
         });
     },
 
     // start process with forever
     start: function(core, options){
+        var self = this;
+
         var args = [
             "start",
             "--Cmd", options.command,
@@ -224,7 +299,8 @@ var commands = {
             "--Image", options.image,
             "--name", [options.application_name, options.id].join("-"),
             "--host-port", options.host_port,
-            "--HostConfig.NetworkMode", options.network_mode
+            "--HostConfig.NetworkMode", options.network_mode,
+            "--HostConfig.Privileged", options.privileged
         ]
 
         if(!_.isEmpty(options.volumes)){
@@ -276,7 +352,7 @@ var commands = {
 
         mkdirp(base_log_dir, function(){
             containers[options.id] = new(forever.Monitor)([__dirname, "..", "executors", options.engine].join("/"), {
-                silent: core.options["log-level"] != "silly",
+                silent: false,
                 max: 1,
                 minUptime: 5000,
                 args: args,
@@ -288,14 +364,16 @@ var commands = {
 
             containers[options.id].on("start", function(){
                 core.loggers["containership.scheduler"].log("info", ["Loading", options.application_name, "container:", options.id].join(" "));
+
                 self.update_container({
                     application_name: options.application_name,
                     container_id: options.id,
-                    status: "loaded"
+                    status: "loaded",
+		    core: core
                 }, function(err){
                     if(err){
                         core.loggers["containership.scheduler"].log("warn", ["Failed to load", options.application_name, "container:", options.id].join(" "));
-                        core.loggers["containership.scheduler"].log("warn", e.message);
+                        core.loggers["containership.scheduler"].log("warn", err.message);
                     }
                 });
             });
@@ -303,6 +381,22 @@ var commands = {
             containers[options.id].on("exit", function(){
                 core.loggers["containership.scheduler"].log("info", ["Unloading", options.application_name, "container:", options.id].join(" "));
                 core.loggers["containership.scheduler"].log("verbose", [options.id, "exited after", ((new Date() - options.start_time) / 1000), "seconds"].join(" "));
+
+                setTimeout(function(){
+                    self.update_container({
+                        application_name: options.application_name,
+                        container_id: options.id,
+                        status: "unloaded",
+                        host: null,
+                        start_time: null,
+                        core: core
+                    }, function(err){
+                        if(err){
+                            core.loggers["containership.scheduler"].log("warn", ["Failed to stop", options.application_name, "container:", options.id].join(" "));
+                            core.loggers["containership.scheduler"].log("warn", err.message);
+                        }
+                    });
+                }, 2000);
             });
 
             containers[options.id].start();
@@ -310,66 +404,74 @@ var commands = {
     },
 
     // stop process
-    stop: function(options){
-        containers[options.container_id].stop();
+    stop: function(core, options){
+        this.delete_container({
+            application_name: options.application,
+            container_id: options.container_id,
+            core: core
+        }, function(err){
+            if(err){
+                core.loggers["containership.scheduler"].log("warn", ["Failed to delete", options.application, "container:", options.container_id].join(" "));
+                core.loggers["containership.scheduler"].log("warn", err.message);
+            }
 
-        if(_.contains(containers[options.container_id].args, "wait")){
-            docker.listContainers({all: true}, function(err, all_containers){
-                if(_.isNull(all_containers))
-                    all_containers = [];
+            containers[options.container_id].stop();
 
-                _.each(all_containers, function(container){
-                    docker.getContainer(container.Id).inspect(function(err, info){
-                        var name = container.Names[0].slice(1);
-                        if(name == [options.application, options.container_id].join("-")){
-                            docker.getContainer(container.Id).kill(function(err, data){
-                                if(_.isNull(err)){
-                                    self.update_container({
-                                        application_name: options.application,
-                                        container_id: options.container_id,
-                                        status: "unloaded"
-                                    }, function(err){
-                                        if(err){
-                                            core.loggers["containership.scheduler"].log("warn", ["Failed to stop", options.application, "container:", options.container_id].join(" "));
-                                            core.loggers["containership.scheduler"].log("warn", e.message);
-                                        }
-                                    });
-                                }
-                            });
-                        }
+            if(_.contains(containers[options.container_id].args, "wait")){
+                docker.listContainers({all: true}, function(err, all_containers){
+                    if(_.isNull(all_containers))
+                        all_containers = [];
+
+                    _.each(all_containers, function(container){
+                        docker.getContainer(container.Id).inspect(function(err, info){
+                            var name = container.Names[0].slice(1);
+                            if(name == [options.application, options.container_id].join("-"))
+                                docker.getContainer(container.Id).kill(function(err, data){});
+                        });
                     });
                 });
-            });
-        }
-        else{
-            self.update_container({
-                application_name: options.application,
-                container_id: options.container_id,
-                status: "unloaded"
-            }, function(err){
-                if(err){
-                    core.loggers["containership.scheduler"].log("warn", ["Failed to stop", options.application, "container:", options.container_id].join(" "));
-                    core.loggers["containership.scheduler"].log("warn", e.message);
-                }
-            });
-        }
+            }
+        });
     },
 
     // update container status
     update_container: function(options, fn){
-        core.cluster.myriad.persistence.get([core.constants.myriad.CONTAINERS_PREFIX, options.application_name, options.container_id].join("::"), function(err, container){
+        options.core.cluster.myriad.persistence.get([options.core.constants.myriad.CONTAINERS_PREFIX, options.application_name, options.container_id].join("::"), function(err, container){
             if(err)
                 return fn(err);
 
             try{
                 container = JSON.parse(container);
                 container.status = options.status;
-                core.cluster.myriad.persistence.set([core.constants.myriad.CONTAINERS_PREFIX, options.application_name, options.container_id].join("::"), container, fn);
+
+                if(_.has(options, "host"))
+                    container.host = options.host;
+
+                if(_.has(options, "start_time"))
+                    container.start_time = options.start_time;
+
+                if(_.has(options, "engine"))
+                    container.engine = options.engine;
+
+                if(_.has(options, "host_port"))
+                    container.host_port = options.host_port;
+
+                if(_.has(options, "container_port"))
+                    container.container_port = options.container_port;
+
+                if(options.status == "unloaded" && container.random_host_port)
+                    container.host_port = null;
+
+                options.core.cluster.myriad.persistence.set([options.core.constants.myriad.CONTAINERS_PREFIX, options.application_name, options.container_id].join("::"), JSON.stringify(container), fn);
             }
             catch(err){
                 return fn(err);
             }
         });
-    }
+    },
 
+    // delete container
+    delete_container: function(options, fn){
+        options.core.cluster.myriad.persistence.delete([options.core.constants.myriad.CONTAINERS_PREFIX, options.application_name, options.container_id].join("::"), fn);
+    }
 }

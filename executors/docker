@@ -36,12 +36,17 @@ nomnom.command("start").options({
     },
     "HostConfig.NetworkMode": {
         required: true
+    },
+    "HostConfig.Privileged": {
+        required: true
     }
 }).callback(function(options){
     var opts = flat.unflatten(options);
 
     if(!_.isEmpty(opts.Cmd))
         opts.Cmd = opts.Cmd.split(" ");
+    else
+        delete opts.Cmd;
 
     if(_.has(opts.HostConfig, "Binds")){
         opts.HostConfig.Binds = opts.HostConfig.Binds.split(" ");
