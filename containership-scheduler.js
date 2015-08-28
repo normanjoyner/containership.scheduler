@@ -31,7 +31,7 @@ ContainershipScheduler.prototype.harmonize = function(){
     self.leader.container.harmonize(function(){
         self.core.loggers["containership.scheduler"].log("info", "Completed application harmonization");
 
-        this.harmonizer = setInterval(function(){
+        self.harmonizer = setInterval(function(){
             self.leader.container.harmonize(function(){
                 self.core.loggers["containership.scheduler"].log("info", "Completed application harmonization");
             });
