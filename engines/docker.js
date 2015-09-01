@@ -36,7 +36,9 @@ module.exports = {
             pre_start: {}
         }
 
-        self.reconcile();
+        setTimeout(function(){
+            self.reconcile();
+        }, 2000);
     },
 
     // add pre start middleware
@@ -171,82 +173,112 @@ module.exports = {
                             });
                         }
                         else if(!_.has(containers, container_id)){
-                            var args = [
-                                "wait",
-                                "--container", container.Id
-                            ]
+                            self.core.cluster.myriad.persistence.get([self.core.constants.myriad.CONTAINERS_PREFIX, application_name, container_id].join("::"), { local: false }, function(err, read_container){
+                                if(err){
+                                    docker.getContainer(container.Id).remove({force: true}, function(err){
+                                        if(_.isNull(err))
+                                            self.core.loggers["containership.scheduler"].log("verbose", ["Cleaned up untracked", application_name, "container:", container_id].join(" "));
+                                    });
+                                }
+                                else{
+                                    var args = [
+                                        "wait",
+                                        "--container", container.Id
+                                    ]
 
-                            var base_log_dir = [self.core.scheduler.options["container-log-dir"], application_name, container_id].join("/");
+                                    var base_log_dir = [self.core.scheduler.options["container-log-dir"], application_name, container_id].join("/");
 
-                            containers[container_id] = new(forever.Monitor)([__dirname, "..", "executors", "docker"].join("/"), {
-                                silent: false,
-                                max: 1,
-                                minUptime: 5000,
-                                args: args,
-                                uid: container_id,
-                                killSignal: "SIGTERM",
-                                outFile: [base_log_dir, "stdout"].join("/"),
-                                errFile: [base_log_dir, "stderr"].join("/")
-                            });
+                                    containers[container_id] = new(forever.Monitor)([__dirname, "..", "executors", "docker"].join("/"), {
+                                        silent: false,
+                                        max: 1,
+                                        minUptime: 5000,
+                                        args: args,
+                                        uid: container_id,
+                                        killSignal: "SIGTERM",
+                                        outFile: [base_log_dir, "stdout"].join("/"),
+                                        errFile: [base_log_dir, "stderr"].join("/")
+                                    });
 
-                            containers[container_id].on("start", function(){
-                                self.core.loggers["containership.scheduler"].log("info", ["Reconciled running", application_name, "container:", container_id].join(" "));
-                                commands.update_container({
-                                    core: self.core,
-                                    application_name: application_name,
-                                    container_id: container_id,
-                                    status: "loaded",
-                                    host: node.id,
-                                    start_time: new Date(info.Created).valueOf(),
-                                    host_port: host_port,
-                                    container_port: container_port,
-                                    engine: "docker"
-                                }, function(err){
-                                    if(err){
-                                        docker.getContainer(container.Id).remove(function(err){
-                                            if(_.isNull(err))
-                                                self.core.loggers["containership.scheduler"].log("verbose", ["Cleaned up dead", application_name, "container:", container_id].join(" "));
+                                    containers[container_id].on("start", function(){
+                                        self.core.loggers["containership.scheduler"].log("info", ["Reconciled running", application_name, "container:", container_id].join(" "));
+
+                                        var config = {
+                                            core: self.core,
+                                            application_name: application_name,
+                                            container_id: container_id,
+                                            status: "loaded",
+                                            host: node.id,
+                                            start_time: new Date(info.Created).valueOf(),
+                                            host_port: host_port,
+                                            container_port: container_port,
+                                            engine: "docker"
+                                        }
+
+                                        try{
+                                            read_container = JSON.parse(read_container);
+                                            if(_.has(read_container.tags, "host")){
+                                                config.tags = read_container.tags;
+                                                config.tags.host = node.id;
+                                            }
+                                        }
+                                        catch(err){}
+
+                                        commands.update_container(config, function(err){
+                                            if(err){
+                                                docker.getContainer(container.Id).remove(function(err){
+                                                    if(_.isNull(err))
+                                                        self.core.loggers["containership.scheduler"].log("verbose", ["Cleaned up dead", application_name, "container:", container_id].join(" "));
+                                                });
+                                            }
                                         });
-                                    }
-                                });
-                            });
+                                    });
 
-                            containers[container_id].on("exit", function(){
-                                self.core.loggers["containership.scheduler"].log("info", ["Unloading", application_name, "container:", container_id].join(" "));
-                                commands.update_container({
-                                    application_name: application_name,
-                                    container_id: container_id,
-                                    status: "unloaded",
-                                    host: null,
-                                    start_time: null,
-                                    core: self.core
-                                }, function(err){
-                                    if(err){
-                                        core.loggers["containership.scheduler"].log("warn", ["Failed to stop", options.application, "container:", options.id].join(" "));
-                                        core.loggers["containership.scheduler"].log("warn", err.message);
-                                    }
-                                });
-                            });
+                                    containers[container_id].on("exit", function(){
+                                        self.core.loggers["containership.scheduler"].log("info", ["Unloading", application_name, "container:", container_id].join(" "));
+                                        commands.update_container({
+                                            application_name: application_name,
+                                            container_id: container_id,
+                                            status: "unloaded",
+                                            host: null,
+                                            start_time: null,
+                                            core: self.core
+                                        }, function(err){
+                                            if(err){
+                                                core.loggers["containership.scheduler"].log("warn", ["Failed to stop", options.application, "container:", options.id].join(" "));
+                                                core.loggers["containership.scheduler"].log("warn", err.message);
+                                            }
+                                        });
+                                    });
 
-                            containers[container_id].start();
+                                    containers[container_id].start();
+                                }
+                            });
                         }
                         else{
-                            self.core.loggers["containership.scheduler"].log("info", ["Reconciled running", application_name, "container:", container_id].join(" "));
-                            commands.update_container({
-                                core: self.core,
-                                application_name: application_name,
-                                container_id: container_id,
-                                status: "loaded",
-                                host: node.id,
-                                start_time: new Date(info.Created).valueOf(),
-                                host_port: host_port,
-                                container_port: container_port,
-                                engine: "docker"
-                            }, function(err){
+                            self.core.cluster.myriad.persistence.get([self.core.constants.myriad.CONTAINERS_PREFIX, application_name, container_id].join("::"), { local: false }, function(err, container){
                                 if(err){
-                                    docker.getContainer(container.Id).remove(function(err){
-                                        if(_.isNull(err))
-                                            self.core.loggers["containership.scheduler"].log("verbose", ["Cleaned up dead", application_name, "container:", container_id].join(" "));
+                                    self.core.loggers["containership.scheduler"].log("verbose", ["Cleaned up untracked", application_name, "container:", container_id].join(" "));
+                                    containers[container_id].stop();
+                                }
+                                else{
+                                    self.core.loggers["containership.scheduler"].log("info", ["Reconciled running", application_name, "container:", container_id].join(" "));
+                                    commands.update_container({
+                                        core: self.core,
+                                        application_name: application_name,
+                                        container_id: container_id,
+                                        status: "loaded",
+                                        host: node.id,
+                                        start_time: new Date(info.Created).valueOf(),
+                                        host_port: host_port,
+                                        container_port: container_port,
+                                        engine: "docker"
+                                    }, function(err){
+                                        if(err){
+                                            docker.getContainer(container.Id).remove(function(err){
+                                                if(_.isNull(err))
+                                                    self.core.loggers["containership.scheduler"].log("verbose", ["Cleaned up dead", application_name, "container:", container_id].join(" "));
+                                            });
+                                        }
                                     });
                                 }
                             });
@@ -443,6 +475,9 @@ var commands = {
 
                 if(_.has(options, "start_time"))
                     container.start_time = options.start_time;
+
+                if(_.has(options, "tags"))
+                    container.tags = options.tags;
 
                 if(_.has(options, "engine"))
                     container.engine = options.engine;
