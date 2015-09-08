@@ -349,12 +349,16 @@ var commands = {
                 args.push(val);
         });
 
+        var keys = _.keys(options.env_vars);
+
         _.each(options.env_vars, function(val, key){
             args.push("--Env");
             val = val.toString();
 
-            if(val.indexOf("$") == 0 && _.has(options.env_vars, val.substring(1, val.length)))
-                val = options.env_vars[val.substring(1, val.length)];
+            _.each(keys, function(_key){
+                if(val.indexOf(["$", _key].join("")) != -1)
+                    val = val.replace(["$", _key].join(""), options.env_vars[_key]);
+            });
 
             args.push([key, val].join("="));
         });
