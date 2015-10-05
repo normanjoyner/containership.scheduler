@@ -20,7 +20,7 @@ nomnom.command("start").options({
         required: true
     },
     Cmd: {
-        required: true
+        required: false
     },
     Image: {
         required: true
@@ -43,10 +43,8 @@ nomnom.command("start").options({
 }).callback(function(options){
     var opts = flat.unflatten(options);
 
-    if(!_.isEmpty(opts.Cmd))
+    if(!_.isUndefined(opts.Cmd))
         opts.Cmd = opts.Cmd.split(" ");
-    else
-        delete opts.Cmd;
 
     if(_.has(opts.HostConfig, "Binds")){
         opts.HostConfig.Binds = opts.HostConfig.Binds.split(" ");
