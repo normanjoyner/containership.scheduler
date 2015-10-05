@@ -321,15 +321,17 @@ var commands = {
 
         var args = [
             "start",
-            "--Cmd", options.command,
-            "--CpuShares", options.cpus,
-            "--Memory", options.memory,
-            "--Image", options.image,
-            "--name", [options.application_name, options.id].join("-"),
-            "--host-port", options.host_port,
-            "--HostConfig.NetworkMode", options.network_mode,
-            "--HostConfig.Privileged", options.privileged
+            ["--CpuShares", options.cpus].join("="),
+            ["--Memory", options.memory].join("="),
+            ["--Image", options.image].join("="),
+            ["--name", [options.application_name, options.id].join("-")].join("="),
+            ["--host-port", options.host_port].join("="),
+            ["--HostConfig.NetworkMode", options.network_mode].join("="),
+            ["--HostConfig.Privileged", options.privilege].join("=")
         ]
+
+        if(!_.isEmpty(options.command))
+            args.push(["--Cmd", options.command].join("="));
 
         if(!_.isEmpty(options.volumes)){
             args.push("--HostConfig.Binds");
