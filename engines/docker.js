@@ -327,7 +327,7 @@ var commands = {
             ["--name", [options.application_name, options.id].join("-")].join("="),
             ["--host-port", options.host_port].join("="),
             ["--HostConfig.NetworkMode", options.network_mode].join("="),
-            ["--HostConfig.Privileged", options.privilege].join("=")
+            ["--HostConfig.Privileged", options.privileged].join("=")
         ]
 
         if(!_.isEmpty(options.command))
