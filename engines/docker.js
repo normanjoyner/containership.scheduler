@@ -422,7 +422,8 @@ var commands = {
                     status: "unloaded",
                     host: null,
                     start_time: null,
-                    core: core
+                    core: core,
+                    respawn: options.respawn
                 }, function(err){
                     if(err){
                         core.loggers["containership.scheduler"].log("warn", ["Failed to stop", options.application_name, "container:", options.id].join(" "));
@@ -468,41 +469,50 @@ var commands = {
 
     // update container status
     update_container: function(options, fn){
-        options.core.cluster.myriad.persistence.get([options.core.constants.myriad.CONTAINERS_PREFIX, options.application_name, options.container_id].join("::"), { local: false }, function(err, container){
-            if(err)
-                return fn(err);
+        if(_.has(options, "respawn") && !options.respawn){
+            this.delete_container({
+                application_name: options.application,
+                container_id: options.container_id,
+                core: options.core
+            }, fn);
+        }
+        else{
+            options.core.cluster.myriad.persistence.get([options.core.constants.myriad.CONTAINERS_PREFIX, options.application_name, options.container_id].join("::"), { local: false }, function(err, container){
+                if(err)
+                    return fn(err);
 
-            try{
-                container = JSON.parse(container);
-                container.status = options.status;
+                try{
+                    container = JSON.parse(container);
+                    container.status = options.status;
 
-                if(_.has(options, "host"))
-                    container.host = options.host;
+                    if(_.has(options, "host"))
+                        container.host = options.host;
 
-                if(_.has(options, "start_time"))
-                    container.start_time = options.start_time;
+                    if(_.has(options, "start_time"))
+                        container.start_time = options.start_time;
 
-                if(_.has(options, "tags"))
-                    container.tags = options.tags;
+                    if(_.has(options, "tags"))
+                        container.tags = options.tags;
 
-                if(_.has(options, "engine"))
-                    container.engine = options.engine;
+                    if(_.has(options, "engine"))
+                        container.engine = options.engine;
 
-                if(_.has(options, "host_port"))
-                    container.host_port = options.host_port;
+                    if(_.has(options, "host_port"))
+                        container.host_port = options.host_port;
 
-                if(_.has(options, "container_port"))
-                    container.container_port = options.container_port;
+                    if(_.has(options, "container_port"))
+                        container.container_port = options.container_port;
 
-                if(options.status == "unloaded" && container.random_host_port)
-                    container.host_port = null;
+                    if(options.status == "unloaded" && container.random_host_port)
+                        container.host_port = null;
 
-                options.core.cluster.myriad.persistence.set([options.core.constants.myriad.CONTAINERS_PREFIX, options.application_name, options.container_id].join("::"), JSON.stringify(container), fn);
-            }
-            catch(err){
-                return fn(err);
-            }
-        });
+                    options.core.cluster.myriad.persistence.set([options.core.constants.myriad.CONTAINERS_PREFIX, options.application_name, options.container_id].join("::"), JSON.stringify(container), fn);
+                }
+                catch(err){
+                    return fn(err);
+                }
+            });
+        }
     },
 
     // delete container
