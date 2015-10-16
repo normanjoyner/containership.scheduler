@@ -471,7 +471,7 @@ var commands = {
     update_container: function(options, fn){
         if(_.has(options, "respawn") && !options.respawn){
             this.delete_container({
-                application_name: options.application,
+                application_name: options.application_name,
                 container_id: options.container_id,
                 core: options.core
             }, fn);
