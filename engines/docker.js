@@ -351,7 +351,9 @@ var commands = {
                 args.push(val);
         });
 
-        var keys = _.keys(options.env_vars);
+        var keys = _.sortBy(_.keys(options.env_vars), function(key){
+            return -key.length;
+        });
 
         _.each(options.env_vars, function(val, key){
             args.push("--Env");
