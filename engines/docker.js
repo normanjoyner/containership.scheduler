@@ -508,6 +508,20 @@ var commands = {
                     if(options.status == "unloaded" && container.random_host_port)
                         container.host_port = null;
 
+                    var attributes = self.core.cluster.legiond.get_attributes();
+                    if(container.status == "loaded"){
+                        self.core.cluster.legiond.set_attributes({
+                            used_cpus: (attributes.used_cpus + container.cpus).toFixed(2),
+                            used_memory: attributes.used_memory + (container.memory * 1024 * 1024)
+                        });
+                    }
+                    else if(container.status == "unloaded"){
+                        self.core.cluster.legiond.set_attributes({
+                            used_cpus: (attributes.used_cpus - container.cpus).toFixed(2),
+                            used_memory: attributes.used_memory - (container.memory * 1024 * 1024)
+                        });
+                    }
+
                     options.core.cluster.myriad.persistence.set([options.core.constants.myriad.CONTAINERS_PREFIX, options.application_name, options.container_id].join("::"), JSON.stringify(container), fn);
                 }
                 catch(err){
