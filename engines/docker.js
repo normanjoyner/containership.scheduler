@@ -62,6 +62,12 @@ module.exports = {
 
         var node = this.core.cluster.legiond.get_attributes();
 
+        commands.update_utilization({
+            core: this.core,
+            cpus: parseFloat(options.cpus),
+            memory: options.memory
+        });
+
         var pre_pull_middleware = _.map(self.middleware.pre_pull, function(middleware, middleware_name){
             return function(fn){
                 middleware(options, fn);
@@ -211,7 +217,8 @@ module.exports = {
                                             start_time: new Date(info.Created).valueOf(),
                                             host_port: host_port,
                                             container_port: container_port,
-                                            engine: "docker"
+                                            engine: "docker",
+                                            update_utilization: true
                                         }
 
                                         try{
@@ -241,7 +248,8 @@ module.exports = {
                                             status: "unloaded",
                                             host: null,
                                             start_time: null,
-                                            core: self.core
+                                            core: self.core,
+                                            update_utilization: true
                                         }, function(err){
                                             if(err){
                                                 core.loggers["containership.scheduler"].log("warn", ["Failed to stop", options.application, "container:", options.id].join(" "));
@@ -425,7 +433,8 @@ var commands = {
                     host: null,
                     start_time: null,
                     core: core,
-                    respawn: options.respawn
+                    respawn: options.respawn,
+                    update_utilization: true
                 }, function(err){
                     if(err){
                         core.loggers["containership.scheduler"].log("warn", ["Failed to stop", options.application_name, "container:", options.id].join(" "));
@@ -471,6 +480,8 @@ var commands = {
 
     // update container status
     update_container: function(options, fn){
+        var self = this;
+
         if(_.has(options, "respawn") && !options.respawn){
             this.delete_container({
                 application_name: options.application_name,
@@ -508,18 +519,21 @@ var commands = {
                     if(options.status == "unloaded" && container.random_host_port)
                         container.host_port = null;
 
-                    var attributes = self.core.cluster.legiond.get_attributes();
-                    if(container.status == "loaded"){
-                        self.core.cluster.legiond.set_attributes({
-                            used_cpus: (attributes.used_cpus + container.cpus).toFixed(2),
-                            used_memory: attributes.used_memory + (container.memory * 1024 * 1024)
-                        });
-                    }
-                    else if(container.status == "unloaded"){
-                        self.core.cluster.legiond.set_attributes({
-                            used_cpus: (attributes.used_cpus - container.cpus).toFixed(2),
-                            used_memory: attributes.used_memory - (container.memory * 1024 * 1024)
-                        });
+                    if(options.update_utilization){
+                        if(container.status == "loaded"){
+                            self.update_utilization({
+                                core: options.core,
+                                cpus: parseFloat(container.cpus),
+                                memory: container.memory
+                            });
+                        }
+                        else if(container.status == "unloaded"){
+                            self.update_utilization({
+                                core: options.core,
+                                cpus: (0 - parseFloat(container.cpus)),
+                                memory: (0 - container.memory)
+                            });
+                        }
                     }
 
                     options.core.cluster.myriad.persistence.set([options.core.constants.myriad.CONTAINERS_PREFIX, options.application_name, options.container_id].join("::"), JSON.stringify(container), fn);
@@ -531,8 +545,37 @@ var commands = {
         }
     },
 
+    // update host utilization
+    update_utilization: function(options){
+        var attributes = options.core.cluster.legiond.get_attributes();
+        options.core.cluster.legiond.set_attributes({
+            used_cpus: parseFloat((attributes.used_cpus + options.cpus).toFixed(2)),
+            used_memory: attributes.used_memory + (options.memory * 1024 * 1024)
+        });
+    },
+
     // delete container
     delete_container: function(options, fn){
-        options.core.cluster.myriad.persistence.delete([options.core.constants.myriad.CONTAINERS_PREFIX, options.application_name, options.container_id].join("::"), fn);
+        var self = this;
+
+        options.core.cluster.myriad.persistence.get([options.core.constants.myriad.CONTAINERS_PREFIX, options.application_name, options.container_id].join("::"), { local: false }, function(err, container){
+            if(err)
+                return fn(err);
+
+            try{
+                container = JSON.parse(container);
+            }
+            catch(err){
+                return fn(err);
+            }
+
+            self.update_utilization({
+                core: options.core,
+                cpus: (0 - parseFloat(container.cpus)),
+                memory: (0 - container.memory)
+            });
+
+            options.core.cluster.myriad.persistence.delete([options.core.constants.myriad.CONTAINERS_PREFIX, options.application_name, options.container_id].join("::"), fn);
+        });
     }
 }
