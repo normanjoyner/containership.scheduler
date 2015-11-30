@@ -85,14 +85,20 @@ module.exports = {
                         var error = new Error("Docker pull failed");
                         error.details = err.message;
 
-                        self.core.cluster.legiond.send("container.unloaded", {
-                            id: options.id,
-                            application_name: options.application_name,
-                            host: node.id,
-                            error: error
-                        });
                         self.core.loggers["containership.scheduler"].log("warn", ["Failed to pull", options.image].join(" "));
                         self.core.loggers["containership.scheduler"].log("errror", err.message);
+
+                        commands.update_container({
+                            application_name: options.application_name,
+                            container_id: options.id,
+                            status: "unloaded",
+                            core: core
+                        }, function(err){
+                            if(err){
+                                core.loggers["containership.scheduler"].log("warn", ["Failed to unloaded", options.application_name, "container:", options.id].join(" "));
+                                core.loggers["containership.scheduler"].log("warn", err.message);
+                            }
+                        });
                     }
                     options.start_args = self.start_args;
 
@@ -104,11 +110,19 @@ module.exports = {
 
                     async.parallel(pre_start_middleware, function(err){
                         if(err){
-                            self.core.cluster.legiond.send("container.unloaded", {
-                                id: options.id,
+                            self.core.loggers["containership.scheduler"].log("warn", "Failed to execute pre-start middleware");
+                            self.core.loggers["containership.scheduler"].log("errror", err.message);
+
+                            commands.update_container({
                                 application_name: options.application_name,
-                                host: node.id,
-                                error: err
+                                container_id: options.id,
+                                status: "unloaded",
+                                core: core
+                            }, function(err){
+                                if(err){
+                                    core.loggers["containership.scheduler"].log("warn", ["Failed to unloaded", options.application_name, "container:", options.id].join(" "));
+                                    core.loggers["containership.scheduler"].log("warn", err.message);
+                                }
                             });
                         }
                         else
@@ -405,7 +419,7 @@ var commands = {
                     application_name: options.application_name,
                     container_id: options.id,
                     status: "loaded",
-		    core: core
+                    core: core
                 }, function(err){
                     if(err){
                         core.loggers["containership.scheduler"].log("warn", ["Failed to load", options.application_name, "container:", options.id].join(" "));
