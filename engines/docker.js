@@ -68,8 +68,6 @@ module.exports = {
             }
         });
 
-        options.cpus = Math.floor(1024 * options.cpus);
-
         async.parallel(pre_pull_middleware, function(err){
             if(err){
                 self.core.cluster.legiond.send("container.unloaded", {
@@ -125,8 +123,10 @@ module.exports = {
                                 }
                             });
                         }
-                        else
+                        else{
+                            options.cpus = Math.floor(1024 * options.cpus);
                             commands.start(self.core, options);
+                        }
                     });
                 });
             }
