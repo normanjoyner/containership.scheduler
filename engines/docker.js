@@ -78,7 +78,10 @@ module.exports = {
                 });
             }
             else{
-                commands.pull(options.image, options.auth || [{}], function(err){
+                var auth = options.auth;
+                delete options.auth;
+
+                commands.pull(options.image, auth || [{}], function(err){
                     if(err){
                         var error = new Error("Docker pull failed");
                         error.details = err.message;
