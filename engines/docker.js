@@ -14,16 +14,17 @@ module.exports = {
         docker.version(function(err, info){
             if(_.isNull(err)){
                 var attributes = self.core.cluster.legiond.get_attributes();
-                var tags = attributes.tags;
-
-                if(!_.has(tags.metadata, "engines"))
-                    tags.engines = {};
-
-                tags.metadata.engines.docker = {
-                    client_version: info.Version,
-                    api_version: info.ApiVersion,
-                    go_version: info.GoVersion
-                }
+                var tags = _.merge({
+                    metadata: {
+                        engines: {
+                            docker: {
+                                client_version: info.Version,
+                                api_version: info.ApiVersion,
+                                go_version: info.GoVersion
+                            }
+                        }
+                    }
+                }, attributes.tags);
 
                 self.core.cluster.legiond.set_attributes(tags);
             }
