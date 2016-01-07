@@ -26,7 +26,9 @@ module.exports = {
                     }
                 }, attributes.tags);
 
-                self.core.cluster.legiond.set_attributes(tags);
+                self.core.cluster.legiond.set_attributes({
+                    tags: tags
+                });
             }
         });
 
