@@ -3,6 +3,9 @@ containership.scheduler
 
 ##About
 
+###Build Status
+[![Build Status](https://drone.containership.io/api/badges/containership/containership.scheduler/status.svg)](https://drone.containership.io/containership/containership.scheduler)
+
 ###Description
 The default scheduler for ContainerShip
 
