@@ -1,6 +1,6 @@
 {
   "name": "containership.scheduler",
-  "version": "1.4.9",
+  "version": "1.4.10",
   "description": "The default scheduler for ContainerShip",
   "main": "application.js",
   "scripts": {
