@@ -81,10 +81,10 @@ module.exports = {
                 });
             }
             else{
-                var auth = options.auth;
+                var auth = options.auth || [{}];
                 delete options.auth;
 
-                commands.pull(options.image, auth || [{}], function(err){
+                commands.pull(options.image, auth, function(err){
                     if(err){
                         var error = new Error("Docker pull failed");
                         error.details = err.message;
@@ -168,8 +168,8 @@ module.exports = {
                     var host_port;
 
                     if(parts.length > 0){
-                        var application_name = _.initial(parts).join("-");
-                        var container_id = _.last(parts);
+                        var application_name = _.take(parts, parts.length - 5).join("-");
+                        var container_id = _.takeRight(parts, 5).join("-");
 
                         if(info.HostConfig.NetworkMode == "bridge"){
                             _.each(info.HostConfig.PortBindings, function(bindings, binding){
