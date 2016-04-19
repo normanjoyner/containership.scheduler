@@ -168,8 +168,8 @@ module.exports = {
                     var host_port;
 
                     if(parts.length > 0){
-                        var application_name = _.initial(parts).join("-");
-                        var container_id = _.last(parts);
+                        var application_name = _.take(parts, parts.length - 5).join("-");
+                        var container_id = _.takeRight(parts, 5).join("-");
 
                         if(info.HostConfig.NetworkMode == "bridge"){
                             _.each(info.HostConfig.PortBindings, function(bindings, binding){
