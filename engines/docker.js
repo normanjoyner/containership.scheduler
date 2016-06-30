@@ -472,7 +472,7 @@ var commands = {
 
             containers[options.container_id].stop();
 
-            if(_.contains(containers[options.container_id].args, "wait")){
+            if(_.includes(containers[options.container_id].args, "wait")){
                 docker.listContainers({all: true}, function(err, all_containers){
                     if(_.isNull(all_containers))
                         all_containers = [];
