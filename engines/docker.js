@@ -436,6 +436,7 @@ var commands = {
                     if(err){
                         core.loggers["containership.scheduler"].log("warn", ["Failed to load", options.application_name, "container:", options.id].join(" "));
                         core.loggers["containership.scheduler"].log("warn", err.message);
+                        containers[options.id].stop();
                     }
                 });
             });
