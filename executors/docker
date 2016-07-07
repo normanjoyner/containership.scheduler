@@ -68,16 +68,15 @@ nomnom.command("start").options({
     }
 
     docker.createContainer(opts, function(err, container){
-        if(err)
-            process.stderr.write(err.message + "\n");
-        else{
+        if(err) {
+            return process.stderr.write(err.message + "\n");
+        } else {
             container.start({}, function(err, data){
                 var cleanup = get_cleanup(container);
                 process.on("SIGTERM", cleanup);
                 container.logs({follow: true, stdout: true, stderr: true}, function(err, stream){
-                    if(err){
-                        process.stderr.write(err.message + "\n");
-                        return;
+                    if(err) {
+                        return process.stderr.write(err.message + "\n");
                     }
 
                     container.modem.demuxStream(stream, process.stdout, process.stderr);
@@ -97,9 +96,8 @@ nomnom.command("wait").options({
     var cleanup = get_cleanup(container);
     process.on("SIGTERM", cleanup);
     container.logs({follow: true, stdout: true, stderr: true}, function(err, stream){
-        if(err){
-            process.stderr.write(err.message + "\n");
-            return;
+        if(err) {
+            return process.stderr.write(err.message + "\n");
         }
 
         container.modem.demuxStream(stream, process.stdout, process.stderr);
