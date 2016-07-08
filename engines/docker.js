@@ -206,7 +206,7 @@ module.exports = {
                                         "--container", container.Id
                                     ]
 
-                                    var base_log_dir = [self.core.scheduler.options["container-log-dir"], application_name, container_id].join("/");
+                                    var base_log_dir = [self.core.options["base-log-dir"], "applications", application_name, container_id].join("/");
 
                                     containers[container_id] = new(forever.Monitor)([__dirname, "..", "executors", "docker"].join("/"), {
                                         silent: false,
@@ -410,7 +410,7 @@ var commands = {
             args.push(options.host_port);
         }
 
-        var base_log_dir = [core.scheduler.options["container-log-dir"], options.application_name, options.id].join("/");
+        var base_log_dir = [core.options["base-log-dir"], "applications", options.application_name, options.id].join("/");
 
         mkdirp(base_log_dir, function(){
             containers[options.id] = new(forever.Monitor)([__dirname, "..", "executors", options.engine].join("/"), {
