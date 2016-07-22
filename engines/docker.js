@@ -167,7 +167,7 @@ module.exports = {
                     var container_port;
                     var host_port;
 
-                    if(parts.length > 0){
+                    if(name.match(/-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/g)){
                         var application_name = _.take(parts, parts.length - 5).join("-");
                         var container_id = _.takeRight(parts, 5).join("-");
 
