@@ -1,5 +1,5 @@
 build:
-  image: library/node:0.10.41
+  image: library/node:6.3.0
   commands:
     - npm install
     - npm test
