@@ -96,11 +96,11 @@ module.exports = {
                             application_name: options.application_name,
                             container_id: options.id,
                             status: "unloaded",
-                            core: core
+                            core: self.core
                         }, function(err){
                             if(err){
-                                core.loggers["containership.scheduler"].log("warn", ["Failed to unloaded", options.application_name, "container:", options.id].join(" "));
-                                core.loggers["containership.scheduler"].log("warn", err.message);
+                                self.core.loggers["containership.scheduler"].log("warn", ["Failed to unloaded", options.application_name, "container:", options.id].join(" "));
+                                self.core.loggers["containership.scheduler"].log("warn", err.message);
                             }
                         });
                     }
@@ -121,11 +121,11 @@ module.exports = {
                                 application_name: options.application_name,
                                 container_id: options.id,
                                 status: "unloaded",
-                                core: core
+                                core: self.core
                             }, function(err){
                                 if(err){
-                                    core.loggers["containership.scheduler"].log("warn", ["Failed to unloaded", options.application_name, "container:", options.id].join(" "));
-                                    core.loggers["containership.scheduler"].log("warn", err.message);
+                                    self.core.loggers["containership.scheduler"].log("warn", ["Failed to unloaded", options.application_name, "container:", options.id].join(" "));
+                                    self.core.loggers["containership.scheduler"].log("warn", err.message);
                                 }
                             });
                         }
