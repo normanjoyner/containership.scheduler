@@ -215,6 +215,7 @@ module.exports = {
                                         args: args,
                                         uid: container_id,
                                         killSignal: "SIGTERM",
+                                        append: true,
                                         outFile: [base_log_dir, "stdout"].join("/"),
                                         errFile: [base_log_dir, "stderr"].join("/")
                                     });
@@ -426,6 +427,7 @@ var commands = {
                 args: args,
                 uid: options.id,
                 killSignal: "SIGTERM",
+                append: true,
                 outFile: [base_log_dir, "stdout"].join("/"),
                 errFile: [base_log_dir, "stderr"].join("/")
             });
