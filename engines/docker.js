@@ -5,6 +5,22 @@ var forever = require("forever-monitor");
 var Docker = require("dockerode");
 var docker = new Docker({socketPath: "/var/run/docker.sock"});
 
+function set_unloaded(core, container_id, application_name, should_respawn) {
+    commands.update_container(_.merge({
+        core: core
+        application_name: application_name,
+        container_id: container_id,
+        status: "unloaded",
+        host: null,
+        start_time: null,
+    }, should_respawn != undefined ? {respawn: should_respawn} : {}), function(err) {
+        if(err){
+            core.loggers["containership.scheduler"].log("warn", ["Failed to unload", application_name, "container:", container_id].join(" "));
+            core.loggers["containership.scheduler"].log("warn", err.message);
+        }
+    });
+}
+
 module.exports = {
 
     initialize: function(core){
@@ -92,18 +108,9 @@ module.exports = {
                         self.core.loggers["containership.scheduler"].log("warn", ["Failed to pull", options.image].join(" "));
                         self.core.loggers["containership.scheduler"].log("errror", err.message);
 
-                        commands.update_container({
-                            application_name: options.application_name,
-                            container_id: options.id,
-                            status: "unloaded",
-                            core: self.core
-                        }, function(err){
-                            if(err){
-                                self.core.loggers["containership.scheduler"].log("warn", ["Failed to unloaded", options.application_name, "container:", options.id].join(" "));
-                                self.core.loggers["containership.scheduler"].log("warn", err.message);
-                            }
-                        });
+                        set_unloaded(self.core, options.id, options.application_name);
                     }
+
                     options.start_args = self.start_args;
 
                     var pre_start_middleware = _.map(self.middleware.pre_start, function(middleware, middleware_name){
@@ -116,18 +123,7 @@ module.exports = {
                         if(err){
                             self.core.loggers["containership.scheduler"].log("warn", "Failed to execute pre-start middleware");
                             self.core.loggers["containership.scheduler"].log("errror", err.message);
-
-                            commands.update_container({
-                                application_name: options.application_name,
-                                container_id: options.id,
-                                status: "unloaded",
-                                core: self.core
-                            }, function(err){
-                                if(err){
-                                    self.core.loggers["containership.scheduler"].log("warn", ["Failed to unloaded", options.application_name, "container:", options.id].join(" "));
-                                    self.core.loggers["containership.scheduler"].log("warn", err.message);
-                                }
-                            });
+                            set_unloaded(self.core, options.id, options.application_name);
                         }
                         else{
                             options.cpus = Math.floor(1024 * options.cpus);
@@ -256,19 +252,12 @@ module.exports = {
 
                                     containers[container_id].on("exit", function(){
                                         self.core.loggers["containership.scheduler"].log("info", ["Unloading", application_name, "container:", container_id].join(" "));
-                                        commands.update_container({
-                                            application_name: application_name,
-                                            container_id: container_id,
-                                            status: "unloaded",
-                                            host: null,
-                                            start_time: null,
-                                            core: self.core
-                                        }, function(err){
-                                            if(err){
-                                                core.loggers["containership.scheduler"].log("warn", ["Failed to stop", options.application, "container:", options.id].join(" "));
-                                                core.loggers["containership.scheduler"].log("warn", err.message);
-                                            }
-                                        });
+                                        set_unloaded(self.core, container_id, application_name);
+                                    });
+
+                                    containers[container_id].on("error", function(error) {
+                                        self.core.loggers["containership.scheduler"].log("warn", ["Caught an error managing the forever-monitor process for", container_id, ":", error].join(" "));
+                                        set_unloaded(self.core, container_id, application_name);
                                     });
 
                                     containers[container_id].start();
@@ -452,21 +441,12 @@ var commands = {
             containers[options.id].on("exit", function(){
                 core.loggers["containership.scheduler"].log("info", ["Unloading", options.application_name, "container:", options.id].join(" "));
                 core.loggers["containership.scheduler"].log("verbose", [options.id, "exited after", ((new Date() - options.start_time) / 1000), "seconds"].join(" "));
+                set_unloaded(core, options.id, options.application_name, options.respawn);
+            });
 
-                self.update_container({
-                    application_name: options.application_name,
-                    container_id: options.id,
-                    status: "unloaded",
-                    host: null,
-                    start_time: null,
-                    core: core,
-                    respawn: options.respawn
-                }, function(err){
-                    if(err){
-                        core.loggers["containership.scheduler"].log("warn", ["Failed to stop", options.application_name, "container:", options.id].join(" "));
-                        core.loggers["containership.scheduler"].log("warn", err.message);
-                    }
-                });
+            containers[options.id].on("error", function(error) {
+                core.loggers["containership.scheduler"].log("warn", ["Caught an error managing the forever-monitor process for", options.id, ":", error].join(" "));
+                set_unloaded(core, options.id, options.application_name);
             });
 
             containers[options.id].start();
