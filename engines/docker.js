@@ -7,12 +7,12 @@ var docker = new Docker({socketPath: "/var/run/docker.sock"});
 
 function set_unloaded(core, container_id, application_name, should_respawn) {
     commands.update_container(_.merge({
-        core: core
+        core: core,
         application_name: application_name,
         container_id: container_id,
         status: "unloaded",
         host: null,
-        start_time: null,
+        start_time: null
     }, should_respawn != undefined ? {respawn: should_respawn} : {}), function(err) {
         if(err){
             core.loggers["containership.scheduler"].log("warn", ["Failed to unload", application_name, "container:", container_id].join(" "));
