@@ -58,6 +58,25 @@ module.exports = {
         setTimeout(function(){
             self.reconcile();
         }, 2000);
+
+        //Cleanup old containers and images every 6 hours.
+        setInterval(() => {
+            this.cleanup();
+        }, 6 * 1000 * 60 * 60);
+    },
+
+    cleanup: function() {
+        this.core.loggers["containership.scheduler"].log("info", "Running Docker-Custodian.");
+        docker.run('yelp/docker-custodian', ['dcgc', '--max-container-age', '6hours', '--max-image-age', '6hours'], process.stdout, {
+            Binds: ["/var/run/docker.sock:/var/run/docker.sock"]
+        }, (err, data, container) => {
+            if(err) {
+                this.core.loggers["containership.scheduler"].log("warn", `Docker-Custodian failed to cleanup old images and containers ${err}`);
+            } else {
+                this.core.loggers["containership.scheduler"].log("info", "Docker-Custodian ran successfully.");
+            }
+
+        });
     },
 
     // add pre start middleware
