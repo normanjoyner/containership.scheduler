@@ -66,16 +66,32 @@ module.exports = {
     },
 
     cleanup: function() {
+        const self = this;
         this.core.loggers["containership.scheduler"].log("info", "Running Docker-Custodian.");
-        docker.run('yelp/docker-custodian', ['dcgc', '--max-container-age', '6hours', '--max-image-age', '6hours'], process.stdout, {
-            Binds: ["/var/run/docker.sock:/var/run/docker.sock"]
-        }, (err, data, container) => {
-            if(err) {
-                this.core.loggers["containership.scheduler"].log("warn", `Docker-Custodian failed to cleanup old images and containers ${err}`);
-            } else {
-                this.core.loggers["containership.scheduler"].log("info", "Docker-Custodian ran successfully.");
+
+        return docker.pull('yelp/docker-custodian', (err, stream) => {
+            if (err) {
+                return this.core.loggers["containership.scheduler"].log("warn", `Docker-Custodian failed to pull ${err}`);
             }
 
+            docker.modem.followProgress(stream, onFinished);
+            function onFinished(err, output) {
+                if (err) {
+                    return self.core.loggers["containership.scheduler"].log("warn", `Docker-Custodian failed to pull ${err}`);
+                }
+
+                self.core.loggers["containership.scheduler"].log("info", `Docker-Custodian pulled well`);
+                docker.run('yelp/docker-custodian', ['dcgc', '--max-container-age', '6hours', '--max-image-age', '6hours'], process.stdout, {
+                    Binds: ["/var/run/docker.sock:/var/run/docker.sock"]
+                }, (err, data, container) => {
+                    if(err) {
+                        self.core.loggers["containership.scheduler"].log("warn", `Docker-Custodian failed to cleanup old images and containers ${err}`);
+                    } else {
+                        self.core.loggers["containership.scheduler"].log("info", "Docker-Custodian ran successfully.");
+                    }
+
+                });
+            }
         });
     },
 
