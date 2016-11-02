@@ -39,6 +39,10 @@ nomnom.command("start").options({
     },
     "HostConfig.Privileged": {
         required: true
+    },
+    "HostConfig.LogConfig.Type": {
+        required: false,
+        default: 'none'
     }
 }).callback(function(options){
     var opts = flat.unflatten(options);
