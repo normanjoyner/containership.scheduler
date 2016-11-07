@@ -295,7 +295,12 @@ module.exports = {
                                         set_unloaded(self.core, container_id, application_name);
                                     });
 
-                                    containers[container_id].start();
+                                    try {
+                                        containers[container_id].start();
+                                    } catch(error) {
+                                        self.core.loggers["containership.scheduler"].log("warn", ["Caught an error when attempting to start container", container_id, ":", error].join(" "));
+                                        set_unloaded(self.core, container_id, application_name);
+                                    }
                                 }
                             });
                         }
@@ -484,7 +489,12 @@ var commands = {
                 set_unloaded(core, options.id, options.application_name);
             });
 
-            containers[options.id].start();
+            try {
+                containers[options.id].start();
+            } catch(error) {
+                core.loggers["containership.scheduler"].log("warn", ["Caught an error when attempting to start container", options.id, ":", error].join(" "));
+                set_unloaded(core, options.id, options.application_name);
+            }
         });
     },
 
