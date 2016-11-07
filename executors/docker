@@ -78,7 +78,7 @@ nomnom.command("start").options({
             container.start({}, function(err, data){
                 var cleanup = get_cleanup(container);
                 process.on("SIGTERM", cleanup);
-                container.logs({follow: true, stdout: true, stderr: true}, function(err, stream){
+                container.attach({follow: true, stdout: true, stderr: true}, function(err, stream){
                     if(err) {
                         return process.stderr.write(err.message + "\n");
                     }
@@ -99,7 +99,7 @@ nomnom.command("wait").options({
     var container = docker.getContainer(options.container);
     var cleanup = get_cleanup(container);
     process.on("SIGTERM", cleanup);
-    container.logs({follow: true, stdout: true, stderr: true}, function(err, stream){
+    container.attach({follow: true, stdout: true, stderr: true}, function(err, stream){
         if(err) {
             return process.stderr.write(err.message + "\n");
         }
