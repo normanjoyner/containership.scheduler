@@ -240,7 +240,7 @@ module.exports = {
                                     var base_log_dir = [self.core.options["base-log-dir"], "applications", application_name, container_id].join("/");
 
                                     containers[container_id] = new(forever.Monitor)([__dirname, "..", "executors", "docker"].join("/"), {
-                                        silent: false,
+                                        silent: true,
                                         max: 1,
                                         minUptime: 5000,
                                         args: args,
@@ -450,7 +450,7 @@ var commands = {
 
         mkdirp(base_log_dir, function(){
             containers[options.id] = new(forever.Monitor)([__dirname, "..", "executors", options.engine].join("/"), {
-                silent: false,
+                silent: true,
                 max: 1,
                 minUptime: 5000,
                 args: args,
