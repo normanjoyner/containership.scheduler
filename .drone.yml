@@ -1,8 +1,9 @@
 build:
-  image: library/node:6.7.0
+  image: library/node:6.9.1
   commands:
-    - npm install
-    - npm test
+    - npm install yarn -g
+    - yarn install --ignore-engines
+    - yarn test
 
 notify:
   slack:
