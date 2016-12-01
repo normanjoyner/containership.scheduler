@@ -1,3 +1,7 @@
+'use strict';
+
+const DockerEngine = require('./docker-engine');
+
 module.exports = {
-    docker: require([__dirname, "docker"].join("/"))
+    docker: (core) => new DockerEngine(core)
 }
