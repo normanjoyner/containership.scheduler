@@ -14,6 +14,18 @@ module.exports = {
      "scheduler-available-cpus" : {
          help: 'Number of CPUs the containership scheduler can allocate to running containers',
          metavar: 'SCHEDULER_AVAILABLE_CPUS'
-     }
+     },
+
+    "max-docker-container-age": {
+        help: "Amount of time before a killed / stopped docker container is cleaned up on disk(hours)",
+        metavar: "HOURS",
+        default: 6
+    },
+
+    "max-docker-image-age": {
+        help: "Amount of time before an unused docker image is cleaned up on disk(hours)",
+        metavar: "HOURS",
+        default: 6
+    }
 
 }
