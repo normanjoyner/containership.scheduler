@@ -110,10 +110,6 @@ class DockerEngine extends Engine {
             }
         });
 
-        setTimeout(() => {
-            this.reconcile();
-        }, 2000);
-
         setInterval(() => {
             this.runDockerCustodian();
         }, 6 * 1000 * 60 * 60);
@@ -333,6 +329,7 @@ class DockerEngine extends Engine {
     }
 
     reconcile(callback) {
+
         this.log('info', 'Started Reconciliation.');
         //List running containers.
         docker.listContainers({all: true}, (err, containersOnHost) => {
@@ -433,7 +430,7 @@ class DockerEngine extends Engine {
                                 //it's not being tracked
                                 if(!_.has(this.containers, containerId)) {
                                     //Check that the container belongs on this host.
-                                    if(containerConfig.host == attrs.id) {
+                                    if(containerConfig.host === null || containerConfig.host === attrs.id) {
                                         //Track it
                                         this.trackContainer(container, containerId, applicationName);
                                         //And then update it's state
