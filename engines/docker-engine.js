@@ -432,7 +432,7 @@ class DockerEngine extends Engine {
                                 //it's not being tracked
                                 if(!_.has(this.containers, containerId)) {
                                     //Check that the container belongs on this host.
-                                    if(containerConfig.host === null || containerConfig.host === attrs.id) {
+                                    if(!containerConfig.host || containerConfig.host === attrs.id) {
                                         //Track it
                                         this.trackContainer(container, containerId, applicationName);
                                         //And then update it's state
