@@ -251,6 +251,8 @@ class DockerEngine extends Engine {
                 unloadContainer();
             } else {
                 const auths = options.auth || [{}];
+                delete options.auth;
+
                 this.pull(options.image, auths, (err) => {
                     if(err) {
                         this.log('warn', `Failed to pull ${options.image}`);
