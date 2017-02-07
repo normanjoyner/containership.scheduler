@@ -291,7 +291,8 @@ class DockerEngine extends Engine {
                                                             if (err) {
                                                                 return this.log('error', `Failed to stop container ${options.id}: ${err}`);
                                                             }
-
+                                                            
+                                                            unloadContainer();
                                                             this.log('info', `Sucessfully stopped container ${options.id}`);
                                                         });
                                                     }
@@ -323,7 +324,16 @@ class DockerEngine extends Engine {
                     return this.log('error', `Failed to stop container ${options.container_id}: ${err}`);
                 }
 
-                this.log('info', `Sucessfully stopped container ${options.container_id}`);
+                Utils.deleteContainerMyriadState(this.core, {
+                    application_name: options.application,
+                    container_id: options.container_id
+                }, (err) => {
+                    if (err) {
+                        return this.log('error', `Failed to stop container ${options.container_id}: ${err}`);
+                    }
+
+                    this.log('info', `Sucessfully stopped container ${options.container_id}`);
+                });
             });
         } else {
             this.log('error', `Attempted to stop an untracked container ${options.container_id}.`);
