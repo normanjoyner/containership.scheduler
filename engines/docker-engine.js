@@ -188,19 +188,20 @@ class DockerEngine extends Engine {
     }
 
     cleanupContainer(container, id, applicationName, respawn) {
-        if(_.has(this.containers, id)) {
-            delete this.containers[id];
+        // if this.containers does not contain the container id, this means the container was
+        // manually stopped and it has already been removed in the stop(...) function
+        if(!_.has(this.containers, id)) {
+            return;
         }
 
-        //Kill is probably extraneous at this point...
-        container.kill(() => {
-            container.remove((err) => {
-                if(err) {
-                    this.log('error', `Error removing container ${id} on cleanup: ${err}`);
-                } else {
-                    this.log('info', `Successfully removed container ${id} on cleanup.`);
-                }
-            });
+        delete this.containers[id];
+
+        container.remove((err) => {
+            if(err) {
+                this.log('error', `Error removing container ${id} on cleanup: ${err}`);
+            } else {
+                this.log('info', `Successfully removed container ${id} on cleanup.`);
+            }
         });
 
         Utils.setContainerMyriadStateUnloaded(this.core, _.merge({
@@ -291,7 +292,7 @@ class DockerEngine extends Engine {
                                                             if (err) {
                                                                 return this.log('error', `Failed to stop container ${options.id}: ${err}`);
                                                             }
-                                                            
+
                                                             unloadContainer();
                                                             this.log('info', `Sucessfully stopped container ${options.id}`);
                                                         });
@@ -319,7 +320,10 @@ class DockerEngine extends Engine {
 
     stop(options) {
         if(_.has(this.containers, options.container_id)) {
-            this.containers[options.container_id].stop((err) => {
+            const container = this.containers[options.container_id];
+            delete this.containers[options.container_id];
+
+            container.stop((err) => {
                 if (err) {
                     return this.log('error', `Failed to stop container ${options.container_id}: ${err}`);
                 }
