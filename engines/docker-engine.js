@@ -20,6 +20,10 @@ class DockerEngine extends Engine {
             container_port: options.host_port
         });
 
+        let keys = _.sortBy(_.keys(options.env_vars), function(key){
+            return -key.length;
+        });
+
         let mapping = {
             'cpus':             (v) => ({'HostConfig': {'CpuShares': Math.floor(v * 1024)}}),
             'memory':           (v) => ({'HostConfig': {'Memory': v * 1024 * 1024}}),
@@ -33,6 +37,13 @@ class DockerEngine extends Engine {
                 'Env': _.map(_.merge(v, {
                     PORT: options.container_port,
                 }), (v,k) => {
+                    v = v.toString();
+                     _.each(keys, function(_key){
+                        if(v.indexOf(['$', _key].json('')) != -1) {
+                            v = v.replace(['$', _key].join(''), options.env_vars[_key]);
+                        }
+                    });
+
                     return _.join([k,v], '=');
                 })
             }),
