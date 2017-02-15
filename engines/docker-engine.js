@@ -38,9 +38,9 @@ class DockerEngine extends Engine {
                     PORT: options.container_port,
                 }), (v,k) => {
                     v = v.toString();
-                     _.each(keys, function(_key){
-                        if(v.indexOf(['$', _key].json('')) != -1) {
-                            v = v.replace(['$', _key].join(''), options.env_vars[_key]);
+                    _.forEach(keys, (_key) => {
+                        if(v.indexOf(`$${_key}`) !== -1) {
+                            v = v.replace(`$${_key}`, options.env_vars[_key]);
                         }
                     });
 
