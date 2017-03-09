@@ -6,6 +6,7 @@ const Docker = require('dockerode');
 const flat = require('flat');
 const fs = require('fs');
 const mkdirp = require('mkdirp');
+const shellQuote = require('shell-quote');
 
 const Engine = require('./engine');
 const Utils = require('../lib/utils');
@@ -31,7 +32,7 @@ class DockerEngine extends Engine {
             'privileged':       (v) => ({'HostConfig': {'Privileged': v}}),
             'network_mode':     (v) => ({'HostConfig': {'NetworkMode': v}}),
             'application_name': (v) => ({'name': `${v}-${options.id}`}),
-            'command':          (v) => !_.isEmpty(v) ? {'Cmd': _.split(v, ' ')} : {},
+            'command':          (v) => !_.isEmpty(v) ? {'Cmd': shellQuote.parse(v)} : {},
 
             'env_vars': (v) => ({
                 'Env': _.map(_.merge(v, {
@@ -315,7 +316,6 @@ class DockerEngine extends Engine {
                                                 this.log('error', `Error starting container ${err}.`);
                                                 unloadContainer();
                                             }
-
                                         });
                                     } else {
                                         this.log('error', `Error creating container ${err}.`);
