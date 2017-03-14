@@ -4,6 +4,7 @@
   "description": "The default scheduler for ContainerShip",
   "main": "application.js",
   "scripts": {
+    "lint": "eslint .",
     "test": "./node_modules/.bin/mocha"
   },
   "repository": {
@@ -29,7 +30,9 @@
     "nomnom": "^1.8.1",
     "shell-quote": "^1.6.1"
   },
-  "devDependencies": {},
+  "devDependencies": {
+    "eslint": "^3.17.1"
+  },
   "keywords": [
     "containership",
     "containership.scheduler",

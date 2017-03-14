@@ -1,13 +1,11 @@
 'use strict';
 
-const _ = require('lodash');
-
 class MethodNotImplementedError extends Error {
     constructor() {
         super('This method was not implemented.');
         this.name = 'MethodNotImplementedError';
     }
-};
+}
 
 class Engine {
 
@@ -46,11 +44,11 @@ class Engine {
         return this.containers;
     }
 
-    start(options) {
+    start() {
         throw new MethodNotImplementedError();
     }
 
-    stop(options) {
+    stop() {
         throw new MethodNotImplementedError();
     }
 
